@@ -669,7 +669,9 @@ LISTEN/NOTIFY and there is nothing to get wrong.
 ### The engine is a separate executable
 
 Stockfish is spawned and spoken to in UCI over a pipe: `STOCKFISH_PATH`, or
-`stockfish` on the PATH. It is not an npm dependency and not compiled in.
+`stockfish` on the PATH. It is not an npm dependency and not compiled in. (It is
+also not in the Arch/Manjaro repositories any more — the README says how to get
+one.)
 
 Two reasons. It is the arm's-length footing under Stockfish's GPL — the club
 runs the distro's engine. And the WASM builds are markedly slower for no gain

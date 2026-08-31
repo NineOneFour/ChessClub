@@ -347,7 +347,7 @@ async function main() {
   if (!engineWorks) {
     skip(
       `the engine checks: no Stockfish at "${process.env.STOCKFISH_PATH ?? "stockfish"}". ` +
-        "Install it (pacman -S stockfish) or set STOCKFISH_PATH.",
+        "Install it (AUR, or build from source — see the README) or set STOCKFISH_PATH.",
     );
     await engine.stop().catch(() => undefined);
   } else {

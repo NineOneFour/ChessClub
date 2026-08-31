@@ -39,9 +39,13 @@ per-move analysis with mistake/blunder grading are in and verified by
 the initial playing-strength estimator and rating history — the brief's items
 5, 7 and 8. Nothing reads the analysis into a number yet.
 
-**The worker needs a Stockfish binary** (`pacman -S stockfish`, or set
-`STOCKFISH_PATH`). Without one, the club works exactly as before and the queue
-grows; `smoke:analysis` skips its engine section and says so.
+**The worker needs a Stockfish binary.** It is *not* in the Arch/Manjaro repos
+— AUR (`yay -S stockfish`) or build from source; see the README. On this machine
+it is built and installed at `~/.local/bin/stockfish` (Stockfish
+dev-20260829-8bc5caa2, `x86-64-avx512`, PGO), which is on the PATH, so
+`STOCKFISH_PATH` is unset and unnecessary. Without an engine the club works
+exactly as before and the queue grows; `smoke:analysis` skips its engine
+section and says so.
 
 ## Scale, and why it matters
 

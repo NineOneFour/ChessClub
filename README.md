@@ -24,9 +24,26 @@ ADMIN_USERNAME=you ADMIN_PASSWORD=... npm run seed:admin
 npm run dev:all
 ```
 
-Analysis is optional. The worker wants a Stockfish binary — `pacman -S
-stockfish`, or set `STOCKFISH_PATH` — and without one the club works exactly as
-before while games queue up for later.
+## Analysis
+
+Optional, and nothing waits for it: without an engine the club works exactly as
+before and finished games queue up for later.
+
+Stockfish is **not in the Arch/Manjaro repositories** — it is on the AUR
+(`yay -S stockfish`), and building it from the official source works without
+root:
+
+```bash
+git clone --depth 1 https://github.com/official-stockfish/Stockfish
+cd Stockfish/src && make -j"$(nproc)" profile-build ARCH=x86-64-avx2
+cp stockfish ~/.local/bin/
+```
+
+`ARCH=x86-64-avx512` if the CPU has it (`grep -o avx512f /proc/cpuinfo`). The
+binary embeds its neural network, so it is one ~95MB file and nothing else.
+
+Then `npm run analysis` works the queue, and `npm run analysis:queue` adds any
+finished games that predate the worker.
 
 Sign in as the administrator, then create an invitation link for each family.
 There is no public sign-up route and there never will be.
