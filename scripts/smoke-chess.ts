@@ -7,6 +7,7 @@ import * as rules from "../lib/chess/rules";
 import * as challengesService from "../lib/services/challenges";
 import * as gamesService from "../lib/services/games";
 import * as offersService from "../lib/services/offers";
+import * as statsService from "../lib/services/stats";
 import * as usersService from "../lib/services/users";
 import { ValidationError } from "../lib/validation";
 
@@ -673,6 +674,144 @@ async function main() {
   for (const win of won) {
     if (win.status === "fulfilled") created.gameIds.push(win.value);
   }
+
+  console.log("Stats");
+
+  // Fresh players, because the members above have a history by now and these
+  // checks are about exact figures.
+  const [ivy, otto, ruth] = await Promise.all(
+    ["Ivy", "Otto", "Ruth"].map((name) =>
+      usersService.create({
+        username: `${name.toLowerCase()}-${SUFFIX}`,
+        realName: name,
+        password: "smoke-password",
+        role: "child",
+        familyId,
+        actorId: null,
+      }),
+    ),
+  );
+  created.userIds.push(ivy, otto, ruth);
+
+  /** A finished game with a decided outcome, without playing it out. */
+  async function finished(
+    whiteId: number,
+    blackId: number,
+    outcome: "white" | "black" | "draw",
+  ) {
+    const gameId = await gamesService.create({
+      whiteId,
+      blackId,
+      initialMs: 0,
+      incrementMs: 0,
+    });
+    created.gameIds.push(gameId);
+
+    if (outcome === "draw") {
+      await gamesService.offerOrAcceptDraw(gameId, whiteId);
+      await gamesService.offerOrAcceptDraw(gameId, blackId);
+    } else {
+      // Resigning loses, so the other side is the one named.
+      await gamesService.resign(gameId, outcome === "white" ? blackId : whiteId);
+    }
+    return gameId;
+  }
+
+  // Ivy against Otto: three games, Ivy losing two of them.
+  await finished(ivy, otto, "black");
+  await finished(otto, ivy, "white");
+  await finished(ivy, otto, "white");
+  // Ivy against Ruth: four games, Ivy ahead.
+  await finished(ivy, ruth, "white");
+  await finished(ruth, ivy, "black");
+  await finished(ivy, ruth, "black");
+  await finished(ivy, ruth, "draw");
+
+  const ivyRecord = await statsService.recordFor(ivy);
+  check("games played counts both colours", ivyRecord.played === 7);
+  check("wins are counted", ivyRecord.wins === 3);
+  check("losses are counted", ivyRecord.losses === 3);
+  check("a draw is neither", ivyRecord.draws === 1);
+  check(
+    "the record adds up",
+    ivyRecord.wins + ivyRecord.losses + ivyRecord.draws === ivyRecord.played,
+  );
+
+  const unplayedRecord = await statsService.recordFor(ruth);
+  check("a member's record only counts their own games", unplayedRecord.played === 4);
+
+  // An unfinished game must not land in anybody's record.
+  const runningId = await gamesService.create({
+    whiteId: ivy,
+    blackId: otto,
+    initialMs: 0,
+    incrementMs: 0,
+  });
+  created.gameIds.push(runningId);
+  check(
+    "a game still being played is not in the record",
+    (await statsService.recordFor(ivy)).played === 7,
+  );
+
+  const ivyRivalries = await statsService.rivalriesFor(ivy);
+  check("one entry per opponent", ivyRivalries.length === 2);
+  check(
+    "most-played comes first",
+    statsService.mostPlayed(ivyRivalries)?.opponent.id === ruth,
+  );
+  check(
+    "and it is the one played more often",
+    statsService.mostPlayed(ivyRivalries)?.played === 4,
+  );
+
+  const versusOtto = ivyRivalries.find((r) => r.opponent.id === otto);
+  check("head to head is from the asker's side", versusOtto?.losses === 2);
+  check("and their wins are the asker's losses", versusOtto?.wins === 1);
+
+  check(
+    "the opponent with a winning record is the nemesis",
+    statsService.nemesis(ivyRivalries)?.opponent.id === otto,
+  );
+  check(
+    "and it is not simply the most played",
+    statsService.nemesis(ivyRivalries)?.opponent.id !==
+      statsService.mostPlayed(ivyRivalries)?.opponent.id,
+  );
+
+  const ottoRivalries = await statsService.rivalriesFor(otto);
+  check(
+    "nobody is a nemesis to the player who beats them",
+    statsService.nemesis(ottoRivalries) === null,
+  );
+
+  const ruthRivalries = await statsService.rivalriesFor(ruth);
+  check(
+    "a nemesis is symmetrical when the record is one-sided",
+    statsService.nemesis(ruthRivalries)?.opponent.id === ivy,
+  );
+
+  // A bad afternoon is not a pattern: two losses is below NEMESIS_MIN_GAMES.
+  const [nell, piet] = await Promise.all(
+    ["Nell", "Piet"].map((name) =>
+      usersService.create({
+        username: `${name.toLowerCase()}-${SUFFIX}`,
+        realName: name,
+        password: "smoke-password",
+        role: "child",
+        familyId,
+        actorId: null,
+      }),
+    ),
+  );
+  created.userIds.push(nell, piet);
+  await finished(nell, piet, "black");
+  await finished(piet, nell, "white");
+
+  const nellRivalries = await statsService.rivalriesFor(nell);
+  check(
+    "a losing record over too few games names nobody",
+    nellRivalries[0]?.losses === 2 && statsService.nemesis(nellRivalries) === null,
+  );
 }
 
 async function cleanup() {

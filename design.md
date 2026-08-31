@@ -272,6 +272,7 @@ lib/
     games.ts                    transactional game state, history, PGN
     challenges.ts               challenge lifecycle, colour assignment
     offers.ts                   open offers: put a board out, take it up
+    stats.ts                    records and rivalries, derived on read
 realtime/
   server.ts                     the WebSocket service
   protocol.ts                    frame types, shared with the browser
@@ -479,17 +480,57 @@ Not oversights — scope:
 - No test suite. The two smoke scripts run against the real database and are
   the current safety net.
 
-## 13. Names, and what is private
+## 13. Three pages about one member
+
+A member is served by three pages, and the split is about audience rather than
+convenience:
+
+- **`/me` — settings.** Only the things a member changes about themselves:
+  avatar, the name the club sees, password. It shows no statistics, because a
+  page you visit to change something should not also be the page you visit to
+  read something.
+- **`/card` — your card.** How you are actually playing: your record, your
+  recent games, your rivalries, and in time the coach. Private. This page
+  changes nothing.
+- **`/profile/[username]` — what the club sees.** Username, family, presence,
+  record and recent games. No personal details, and no rivalries.
+
+The record and the game list are the same components on the card and the public
+profile (`RecordPanel`, `GameList`). If your own card and everyone else's view
+of it disagreed about your record, one of them would be wrong.
+
+**Rivalries are private on purpose.** "Who keeps beating me" is a useful thing
+to know about yourself and an unkind thing for eight children to know about each
+other. `nemesis()` needs a losing record over at least `NEMESIS_MIN_GAMES`
+games, so one bad afternoon does not name somebody.
+
+## 14. Names, and what is private
 
 Every member has two names. The **username** is the login handle and the
 public identity: it is what the roster, chat, the game rooms, member cards,
 challenges and the PGN all show. The **real name** is a private field.
+
+**The username is the member's own to choose**, and they change it in `/me`. A
+child who would rather be @chesspotato than @manoli may be @chesspotato, and
+picking the name is most of the point of having one. Renaming is the only
+self-service change that alters how somebody appears to everybody else, so
+`updateProfile()` audits it as `user.rename` with the old name in the detail —
+a parent can find out who @chesspotato used to be.
+
+**The real name is not theirs to change.** It is how a parent knows which child
+they are looking at on the family page; a child renaming themselves there would
+take that away. It is set when the account is created and changed by a grown-up.
 
 A real name is visible to exactly two audiences: the member themselves, and
 grown-ups in the same family. The predicate is `canSeeRealName()` in
 `lib/roles.ts`, kept in that leaf module for the same reason `isGrownUp()` is —
 a Client Component importing `lib/services/users.ts` would drag Postgres and
 argon2 into the browser bundle.
+
+**The public member card shows no real name at all**, not even to the family
+who may see it. A page that shows a private field to some viewers and not
+others is a page that will eventually show it to the wrong one, and the family
+page and the admin roster already exist for looking a child up by name.
 
 **The administrator is not an exception**, which is the part that looks wrong
 until you know what it is protecting. Running the club means knowing which

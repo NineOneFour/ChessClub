@@ -6,10 +6,10 @@ import { AvatarPicker } from "./AvatarPicker";
 import { changeMyPassword, updateMyProfile } from "./actions";
 
 export function ProfileForm({
-  realName,
+  username,
   avatar,
 }: {
-  realName: string;
+  username: string;
   avatar: string;
 }) {
   const [state, action] = useActionState(updateMyProfile, undefined);
@@ -17,16 +17,16 @@ export function ProfileForm({
   return (
     <form action={action} className="sheet space-y-4 p-5">
       <Field
-        name="realName"
-        label="Your name"
-        hint="Only you and the grown-ups in your family see this."
-        defaultValue={realName}
+        name="username"
+        label="Your name in the club"
+        hint="Letters, numbers, dashes and underscores. Everybody sees this one, so changing it changes what they see."
+        defaultValue={username}
         required
-        maxLength={40}
+        maxLength={24}
       />
       <AvatarPicker current={avatar} />
       <FormError state={state} />
-      <SubmitButton label="Save card" pendingLabel="Saving" />
+      <SubmitButton label="Save" pendingLabel="Saving" />
     </form>
   );
 }

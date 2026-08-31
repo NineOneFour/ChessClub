@@ -1,7 +1,7 @@
 import "dotenv/config";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { client, db } from "../lib/db";
-import { chatMessages, families, invitations, users } from "../lib/db/schema";
+import { auditLog, chatMessages, families, invitations, users } from "../lib/db/schema";
 import { CLUB_CHANNEL } from "../lib/db/schema";
 import * as chatService from "../lib/services/chat";
 import * as invitationsService from "../lib/services/invitations";
@@ -170,6 +170,69 @@ async function main() {
     "family roster lists both",
     (await usersService.listChildrenOfFamily(familyId)).length === 2,
   );
+
+  console.log("Choosing your own name");
+
+  const kid = kidIds[0];
+  const before = (await usersService.getById(kid))!;
+
+  await usersService.updateProfile(kid, {
+    username: `chesspotato-${SUFFIX}`,
+    avatar: "knight",
+  });
+  const renamed = (await usersService.getById(kid))!;
+  check("a child may rename themselves", renamed.username === `chesspotato-${SUFFIX}`);
+  check("and change their avatar with it", renamed.avatar === "knight");
+  check(
+    "the real name is not theirs to change",
+    renamed.realName === before.realName,
+  );
+  check(
+    "the account is the same account",
+    renamed.id === before.id && renamed.familyId === before.familyId,
+  );
+  check(
+    "the old username no longer finds them",
+    (await usersService.getByUsername(before.username)) === null,
+  );
+
+  await expectRejection("taking somebody else's username is refused", () =>
+    usersService.updateProfile(kid, {
+      username: `max-${SUFFIX}`,
+      avatar: "knight",
+    }),
+  );
+  await expectRejection("a name that isn't a username is refused", () =>
+    usersService.updateProfile(kid, { username: "!!", avatar: "knight" }),
+  );
+  await expectRejection("an avatar that doesn't exist is refused", () =>
+    usersService.updateProfile(kid, {
+      username: `chesspotato-${SUFFIX}`,
+      avatar: "spaceship",
+    }),
+  );
+  check(
+    "a refused change leaves the name alone",
+    (await usersService.getById(kid))?.username === `chesspotato-${SUFFIX}`,
+  );
+
+  // Renaming yourself is the one self-service change everybody else can see,
+  // so a grown-up can find out who @chesspotato used to be.
+  const renames = await db
+    .select({ detail: auditLog.detail })
+    .from(auditLog)
+    .where(and(eq(auditLog.action, "user.rename"), eq(auditLog.targetId, String(kid))));
+  check("the rename is in the audit trail", renames.length === 1);
+  check(
+    "and records what it was before",
+    (renames[0]?.detail as { from?: string })?.from === before.username,
+  );
+
+  // Put it back, so the checks below read as they were written.
+  await usersService.updateProfile(kid, {
+    username: before.username,
+    avatar: before.avatar,
+  });
 
   console.log("The roster");
 

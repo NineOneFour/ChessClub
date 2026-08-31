@@ -294,19 +294,57 @@ export async function create(input: {
   return id;
 }
 
-/** Profile fields a member may change about themselves. */
+/**
+ * What a member may change about themselves: the name the club sees, and their
+ * avatar.
+ *
+ * The username is theirs to pick. A child who wants to be ChessPotato may be
+ * ChessPotato, because the username is a chosen identity and choosing it is
+ * most of the fun. The real name is not theirs to change — it is how a parent
+ * knows which child they are looking at on the family page, and a child
+ * renaming themselves there would take that away.
+ *
+ * A rename is audited. It is the one self-service change that alters how
+ * somebody appears to everybody else, so a grown-up can see that @chesspotato
+ * used to be @manoli.
+ */
 export async function updateProfile(
   userId: number,
-  input: { realName: unknown; avatar: unknown },
+  input: { username: unknown; avatar: unknown },
 ) {
-  const realName = requireText(input.realName, "Name", { max: 40 });
+  const username = normalizeUsername(input.username);
   const avatarRaw = String(input.avatar ?? "");
   if (!isAvatarKey(avatarRaw)) fail("Pick one of the available avatars.");
 
+  const [current] = await db
+    .select({ username: users.username })
+    .from(users)
+    .where(eq(users.id, userId));
+  if (!current) fail("That account no longer exists.");
+
+  if (current.username !== username) {
+    const taken = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(and(eq(users.username, username), ne(users.id, userId)))
+      .limit(1);
+    if (taken.length) fail(`The username "${username}" is already taken.`);
+  }
+
   await db
     .update(users)
-    .set({ realName, avatar: avatarRaw })
+    .set({ username, avatar: avatarRaw })
     .where(eq(users.id, userId));
+
+  if (current.username !== username) {
+    await audit.record({
+      actorId: userId,
+      action: "user.rename",
+      targetType: "user",
+      targetId: userId,
+      detail: { from: current.username, to: username },
+    });
+  }
 }
 
 /**

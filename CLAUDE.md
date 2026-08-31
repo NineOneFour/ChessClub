@@ -92,6 +92,16 @@ A page never writes SQL. A service never imports from `app/`.
 - **`ValidationError` is the only exception the UI turns into a message.**
   Throw it (via `fail()`) for anything a member can fix; let everything else
   reach the error boundary rather than flattening it to "something went wrong".
+- **`/me`, `/card` and `/profile/[username]` are three pages on purpose.**
+  Settings, your own stats, and what the club sees. See `design.md` §13 before
+  moving anything between them: rivalries are private, and the public card
+  shows no real name to anybody.
+- **A username is not a stable identifier.** Members rename themselves in
+  `/me`, so never cache one, key anything on one, or store one as a reference
+  — `users.id` is the identity. A rename is audited as `user.rename`.
+- **The real name is not self-editable.** `updateProfile()` takes a username
+  and an avatar and nothing else. A child renaming themselves on the family
+  page would take away the parent's way of telling their children apart.
 - **Grown-ups play too, and are tagged.** Parents and the administrator are on
   the roster and in chat with a `PARENT` chip and a double-bordered avatar. The
   predicate is `isGrownUp()` in `lib/roles.ts` — keep it in that leaf module,
