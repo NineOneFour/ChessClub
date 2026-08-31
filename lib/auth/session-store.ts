@@ -20,6 +20,7 @@ export type SessionUser = {
   familyName: string | null;
   avatar: string;
   chatEnabled: boolean;
+  gameChatEnabled: boolean;
   isMuted: boolean;
 };
 
@@ -35,6 +36,7 @@ export async function findSessionUserByToken(
       familyName: families.name,
       avatar: users.avatar,
       chatEnabled: users.chatEnabled,
+      gameChatEnabled: users.gameChatEnabled,
       isMuted: users.isMuted,
       isActive: users.isActive,
     })

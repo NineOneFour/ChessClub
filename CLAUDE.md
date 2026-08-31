@@ -27,6 +27,12 @@ Reviewing a finished game walks the score sheet: tap a move, use the four
 controls, or the arrow keys. It shows `game_moves.fen_after` and holds no
 chess logic — see the trap about `lib/chess/position.ts` below.
 
+Parental controls are in: chat, game chat, playing hours, a lock on choosing
+your own name, and account suspension — see `design.md` §15. A parent reviews
+their children's games and chat on the family page.
+
+Boards and pieces are choosable per member (`design.md` §16).
+
 Phase 3 (Stockfish analysis, ratings, coaching) has not started.
 
 ## Scale, and why it matters
@@ -96,6 +102,26 @@ A page never writes SQL. A service never imports from `app/`.
   Settings, your own stats, and what the club sees. See `design.md` §13 before
   moving anything between them: rivalries are private, and the public card
   shows no real name to anybody.
+- **`canSpeak(member, channel)` takes a channel now.** Club chat and game-room
+  chat are separate switches (`chat_enabled`, `game_chat_enabled`), and the
+  channel decides which apply. Calling it without a channel answers for the
+  clubhouse. See `design.md` §15.
+- **Playing hours gate *starting* a game and nothing else.** A game already
+  running is never interrupted — no resignation, no flag, no ejection.
+  `users.assertCanStartGame()` is called from exactly four places
+  (`challenges.create`, `challenges.accept`, `offers.create`, `offers.accept`)
+  and both players are checked. The maths is in `lib/play-window.ts`, which is
+  pure so the UI and the services agree; a window whose end precedes its start
+  spans midnight.
+- **A parent can lock a child's name and avatar (`can_customize`) but never
+  their board.** `updateProfile()` refuses when it is off;
+  `setBoardPreferences()` does not care, because nobody else sees the board.
+- **Board and piece styles are the viewer's own, and arrive as CSS custom
+  properties.** `lib/board-styles.ts` is a pure leaf (both `Board.tsx` and the
+  settings previews import it). Tailwind cannot generate a class for a runtime
+  colour, so the squares read `var(--sq-dark)` and the glyphs read the piece
+  properties — don't try to make these Tailwind classes. Unknown keys fall back
+  to the default rather than blanking the board.
 - **A username is not a stable identifier.** Members rename themselves in
   `/me`, so never cache one, key anything on one, or store one as a reference
   — `users.id` is the identity. A rename is audited as `user.rename`.

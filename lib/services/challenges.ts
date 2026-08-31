@@ -5,6 +5,7 @@ import { isTimeControlKey, timeControl } from "../chess/time-controls";
 import { describeTimeControl } from "../chess/time-controls";
 import { fail } from "../validation";
 import * as games from "./games";
+import * as users_ from "./users";
 
 /**
  * Challenges.
@@ -113,6 +114,7 @@ export async function create(input: {
   if (await games.activeGameFor(opponent.id)) {
     fail(`${opponent.username} is already playing.`);
   }
+  await users_.assertCanStartGame([input.fromId, opponent.id], input.fromId);
 
   try {
     const rows = await db
@@ -185,6 +187,10 @@ export async function accept(
 
   const challenge = claimed[0];
   if (!challenge) fail("That challenge is no longer open.");
+
+  // Out of hours the challenge stays claimed but no game starts, which is the
+  // right way round: the offer is spent rather than left dangling until dawn.
+  await users_.assertCanStartGame([challenge.fromId, challenge.toId], userId);
 
   const challengerIsWhite =
     challenge.color === "white"

@@ -1,6 +1,13 @@
 "use client";
 
 import { useRef, useState } from "react";
+import {
+  boardStyle,
+  boardVars,
+  glyph,
+  pieceSet,
+  type PieceSet,
+} from "@/lib/board-styles";
 
 /**
  * The board.
@@ -12,23 +19,18 @@ import { useRef, useState } from "react";
  *
  * Pieces are Unicode glyphs rather than images. There are no assets to license
  * or ship, it scales with the board, and the typographic treatment is of a
- * piece with the rest of the design. The solid (black) glyphs are used for both
- * colours; white pieces are filled white and outlined in ink, which reads far
- * better at small sizes than the hollow outline glyphs.
+ * piece with the rest of the design. The default set uses the solid (black)
+ * glyphs for both colours, filling white white and outlining it in ink, which
+ * reads far better at small sizes than the hollow outline glyphs.
+ *
+ * The squares and the pieces come from the viewer's own chosen style — see
+ * lib/board-styles.ts. They are custom properties set on the grid rather than
+ * classes, because Tailwind cannot generate a class for a colour picked at
+ * runtime.
  */
 
 const FILES = ["a", "b", "c", "d", "e", "f", "g", "h"] as const;
 const RANKS = ["8", "7", "6", "5", "4", "3", "2", "1"] as const;
-
-/** Solid glyphs, used for both colours. */
-const GLYPHS: Record<string, string> = {
-  k: "♚",
-  q: "♛",
-  r: "♜",
-  b: "♝",
-  n: "♞",
-  p: "♟",
-};
 
 const PIECE_NAMES: Record<string, string> = {
   k: "king",
@@ -89,6 +91,9 @@ export function Board({
   /** Null for a spectator or a finished game: the board becomes read-only. */
   playingAs,
   onMove,
+  /** The viewer's own board and pieces. Unknown keys fall back to the default. */
+  styleKey,
+  pieceSetKey,
 }: {
   fen: string;
   orientation: "white" | "black";
@@ -99,6 +104,8 @@ export function Board({
   turn: "white" | "black";
   playingAs: "white" | "black" | null;
   onMove: (move: { from: string; to: string; promotion?: string }) => void;
+  styleKey?: string | null;
+  pieceSetKey?: string | null;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [pending, setPending] = useState<{ from: string; to: string } | null>(
@@ -196,10 +203,14 @@ export function Board({
 
   const checkedKing = inCheck ? kingSquare(pieces, turn) : null;
 
+  const style = boardStyle(styleKey);
+  const set = pieceSet(pieceSetKey);
+
   return (
     <div className="relative">
       <div
         ref={boardRef}
+        style={boardVars(style, set)}
         className="grid aspect-square w-full touch-none select-none grid-cols-8 grid-rows-8 border-2 border-ink"
         role="grid"
         aria-label="Chess board"
@@ -230,7 +241,7 @@ export function Board({
               onPointerUp={(event) => onSquarePointerUp(square, event)}
               className={[
                 "relative grid place-items-center",
-                dark ? "bg-[#a8adc8]" : "bg-[#f1f2f7]",
+                dark ? "bg-[var(--sq-dark)]" : "bg-[var(--sq-light)]",
                 square === selected ? "outline outline-2 -outline-offset-2 outline-ink" : "",
                 lastMove && (square === lastMove.from || square === lastMove.to)
                   ? "shadow-[inset_0_0_0_3px_rgba(157,116,32,0.55)]"
@@ -242,22 +253,22 @@ export function Board({
               ].join(" ")}
             >
               {showCoordRank && (
-                <span className="pointer-events-none absolute left-0.5 top-0 font-mono text-[0.55rem] text-ink/55">
+                <span className="pointer-events-none absolute left-0.5 top-0 font-mono text-[0.55rem] text-[var(--sq-ink)] opacity-55">
                   {square[1]}
                 </span>
               )}
               {showCoordFile && (
-                <span className="pointer-events-none absolute bottom-0 right-0.5 font-mono text-[0.55rem] text-ink/55">
+                <span className="pointer-events-none absolute bottom-0 right-0.5 font-mono text-[0.55rem] text-[var(--sq-ink)] opacity-55">
                   {square[0]}
                 </span>
               )}
 
               {/* A dot for an empty legal square, a ring for a capture. */}
               {isTarget && !isCapture && (
-                <span className="pointer-events-none absolute h-[22%] w-[22%] rounded-full bg-ink/30" />
+                <span className="pointer-events-none absolute h-[22%] w-[22%] rounded-full bg-[var(--sq-ink)] opacity-30" />
               )}
               {isCapture && (
-                <span className="pointer-events-none absolute inset-[6%] rounded-full border-[3px] border-ink/35" />
+                <span className="pointer-events-none absolute inset-[6%] rounded-full border-[3px] border-[var(--sq-ink)] opacity-35" />
               )}
 
               {piece && (
@@ -270,7 +281,7 @@ export function Board({
                     dragging === square ? "opacity-40" : "",
                   ].join(" ")}
                 >
-                  {GLYPHS[piece.role]}
+                  {glyph(set, piece.role, piece.color)}
                 </span>
               )}
             </div>
@@ -280,6 +291,7 @@ export function Board({
 
       {pending && (
         <PromotionPicker
+          set={set}
           color={playingAs ?? "white"}
           onPick={(role) => {
             onMove({ from: pending.from, to: pending.to, promotion: role });
@@ -298,10 +310,12 @@ export function Board({
  * of the board.
  */
 function PromotionPicker({
+  set,
   color,
   onPick,
   onCancel,
 }: {
+  set: PieceSet;
   color: "white" | "black";
   onPick: (role: string) => void;
   onCancel: () => void;
@@ -312,6 +326,7 @@ function PromotionPicker({
       onClick={onCancel}
     >
       <div
+        style={boardVars(boardStyle(null), set)}
         className="sheet flex gap-1 p-2"
         onClick={(event) => event.stopPropagation()}
       >
@@ -326,7 +341,7 @@ function PromotionPicker({
             }`}
           >
             <span aria-hidden className="piece-glyph">
-              {GLYPHS[role]}
+              {glyph(set, role, color)}
             </span>
           </button>
         ))}

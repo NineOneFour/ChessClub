@@ -29,6 +29,8 @@ export function GameRoom({
   viewerId,
   canChat,
   chatBlockedReason,
+  boardStyle,
+  pieceSet,
 }: {
   gameId: number;
   initialGame: WireGame;
@@ -36,6 +38,9 @@ export function GameRoom({
   viewerId: number;
   canChat: boolean;
   chatBlockedReason: string | null;
+  /** The viewer's own board and pieces. Null falls back to the default. */
+  boardStyle: string | null;
+  pieceSet: string | null;
 }) {
   const router = useRouter();
 
@@ -197,6 +202,8 @@ export function GameRoom({
             turn={shown.turn}
             playingAs={game.status === "active" ? playingAs : null}
             onMove={move}
+            styleKey={boardStyle}
+            pieceSetKey={pieceSet}
           />
         </div>
 

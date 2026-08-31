@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { signOut } from "@/app/actions";
 import { Avatar } from "./Avatar";
 
 /**
@@ -11,8 +12,8 @@ import { Avatar } from "./Avatar";
  * two of six links competing with the clubhouse; behind your own name is where
  * anybody would look for them.
  *
- * Sign out stays outside the menu on purpose. A child who wants to stop playing
- * should not have to find it inside something.
+ * Sign out is in here too, under a rule: it is the one item that isn't a page,
+ * and it is last because it is the one nobody means to tap by accident.
  */
 export function UserMenu({
   username,
@@ -78,6 +79,15 @@ export function UserMenu({
         >
           <MenuLink href="/card">My card</MenuLink>
           <MenuLink href="/me">Settings</MenuLink>
+          <form action={signOut} className="mt-1 border-t border-rule pt-1">
+            <button
+              role="menuitem"
+              type="submit"
+              className="block w-full px-3 py-1.5 text-left text-sm hover:bg-paper hover:text-stamp"
+            >
+              Sign out
+            </button>
+          </form>
         </div>
       )}
     </div>

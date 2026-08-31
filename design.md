@@ -563,3 +563,89 @@ Two consequences worth keeping:
   the typechecker will catch — the narrow prop type accepts the wide object
   quite happily. `app/admin/page.tsx` had exactly this bug. Pass the fields,
   not the record.
+
+## 15. Parental controls
+
+The brief asks for controls that are "useful without turning the application
+into enterprise identity management wearing a chess hat", so each one is a
+column on `users` and a button on the family page. There is no policy engine,
+no inheritance, and no per-child settings tree.
+
+A parent has five switches over each of their own children, and the
+administrator has the two account-level ones over everybody:
+
+| Control | Column | What it stops |
+| --- | --- | --- |
+| Chat | `chat_enabled` | All chat, clubhouse and game rooms |
+| Game chat | `game_chat_enabled` | Talking in game rooms only |
+| Name and avatar | `can_customize` | Choosing their own username or avatar |
+| Playing hours | `play_from_minute`, `play_to_minute` | *Starting* a game out of hours |
+| Account | `is_active` | Signing in at all (also kills sessions) |
+
+`chat.canSpeak(member, channel)` is the whole chat rule and both tiers run it.
+The order it tests in is the order of authority: an admin mute silences a member
+everywhere, chat-off is the master switch, and game-chat-off is the narrower one
+that leaves the clubhouse alone. A parent happy with the clubhouse but not with
+a running commentary during a game wants the third and not the second.
+
+### Playing hours
+
+Two integers, minutes from local midnight, both null for no window — which is
+how every account starts. `lib/play-window.ts` is the only place that reads
+them, and it is pure, so the settings UI renders the same window the services
+enforce.
+
+Three decisions that are the point of the feature:
+
+- **A window that ends before it starts spans midnight.** 20:00 to 07:00 is one
+  row, and "no chess after bedtime" is the obvious thing a parent will write.
+- **It gates starting a game, never a game in progress.** Closing time arriving
+  mid-game does not resign, flag or eject anybody. A child losing a game they
+  were winning because the clock struck eight is a worse outcome than a late
+  finish, and the brief's first principle is fun. `assertCanStartGame()` is
+  called from `challenges.create`, `challenges.accept`, `offers.create` and
+  `offers.accept` — the four ways a game begins — and nowhere else.
+- **Both players are checked, and named.** A child whose evening is over should
+  not be pulled into a game by a friend whose isn't, and the friend is told
+  whose hours are the problem rather than left tapping a dead button.
+
+Server local time, deliberately. A timezone column is a setting nobody would
+ever set correctly; if the club ever spans timezones, this is the thing to
+revisit.
+
+### What a parent may not switch off
+
+The board and the pieces. `can_customize` is about what the *club* is shown —
+the name and the face beside it — and nobody but the member ever sees which
+squares they like. A settings page that can be emptied entirely is a settings
+page a child has no reason to visit.
+
+## 16. Boards and pieces
+
+Five boards and four piece sets, presets like the avatars and for the same
+reasons: a short menu produces a board that looks deliberate, and there is
+nothing to upload, validate, license or host.
+
+Everything is Unicode and CSS. The two Unicode chess families are the whole
+range available — the solid glyphs (♚) and the hollow ones (♔) — so a piece set
+is a choice of family per colour plus fill, outline and outline width. That is
+fewer sets than a site shipping sprite sheets, and every one of them is legible
+at the size a phone draws it. The default uses the solid family for both
+colours, filling white white, because the hollow glyphs' thin strokes disappear
+small; Newsprint uses the hollow family for white on purpose, because it is the
+newspaper diagram and looks like one.
+
+The colours arrive as **custom properties set on the board element**, not as
+classes: Tailwind cannot generate a class for a colour chosen at runtime. The
+squares read `var(--sq-dark)`, and `.piece-white` / `.piece-black` in
+`globals.css` read the fill and stroke properties with the default set as
+fallbacks — so a glyph rendered outside a board, like the promotion picker's
+buttons, still looks right without being handed a set.
+
+`lib/board-styles.ts` is a pure leaf module holding all of it, because both
+`Board.tsx` and the settings previews need it. **The preference is the viewer's
+own**: the game page reads it for whoever is looking and passes it down, so two
+players in the same game sit at different boards, and a spectator at a third.
+Unknown keys fall back to the default rather than blanking the board, which is
+what makes it safe to retire a style later.
+

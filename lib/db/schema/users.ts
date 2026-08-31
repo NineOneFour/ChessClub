@@ -58,6 +58,38 @@ export const users = pgTable(
     chatEnabled: boolean("chat_enabled").notNull().default(true),
     /** Admin control: temporarily silenced in chat. */
     isMuted: boolean("is_muted").notNull().default(false),
+    /**
+     * Parental control: may this child talk in a game room.
+     *
+     * The narrower switch. `chatEnabled` is the master — off means no chat
+     * anywhere — and this one closes the game rooms while leaving the clubhouse
+     * open, for a parent who is happy with the clubhouse but not with a running
+     * commentary during somebody's game. See `chat.canSpeak`.
+     */
+    gameChatEnabled: boolean("game_chat_enabled").notNull().default(true),
+    /**
+     * Parental control: may this child change their own username and avatar.
+     * Off means the grown-ups choose what the club calls them. It does not
+     * cover the board and the pieces, which only the member ever sees.
+     */
+    canCustomize: boolean("can_customize").notNull().default(true),
+
+    /**
+     * Playing hours, as minutes from local midnight — 16 * 60 is 4pm. Both
+     * null means no restriction, which is the default and how every account
+     * starts.
+     *
+     * A window that ends before it starts spans midnight (22:00 to 07:00), so
+     * "not after bedtime" needs no second row. Server local time; see
+     * lib/play-window.ts, which is the only place that reads these.
+     */
+    playFromMinute: integer("play_from_minute"),
+    playToMinute: integer("play_to_minute"),
+
+    /** Key into BOARD_STYLES in lib/board-styles.ts. The member's own view. */
+    boardStyle: text("board_style").notNull().default("scoresheet"),
+    /** Key into PIECE_SETS in lib/board-styles.ts. */
+    pieceSet: text("piece_set").notNull().default("scoresheet"),
 
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()

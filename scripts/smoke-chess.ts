@@ -8,6 +8,7 @@ import * as challengesService from "../lib/services/challenges";
 import * as gamesService from "../lib/services/games";
 import * as offersService from "../lib/services/offers";
 import * as statsService from "../lib/services/stats";
+import * as playWindow from "../lib/play-window";
 import * as usersService from "../lib/services/users";
 import { ValidationError } from "../lib/validation";
 
@@ -29,6 +30,33 @@ const created: { userIds: number[]; familyIds: number[]; gameIds: number[] } = {
 function check(label: string, condition: boolean) {
   if (!condition) throw new Error(`FAILED: ${label}`);
   console.log(`  ok  ${label}`);
+}
+
+/**
+ * Like expectRejection, but the reason has to be the reason. Several of these
+ * paths refuse for more than one cause — "you're already playing" would let a
+ * playing-hours check pass while doing nothing at all.
+ */
+async function expectRejectionSaying(
+  label: string,
+  fragment: string,
+  body: () => Promise<unknown>,
+) {
+  try {
+    await body();
+  } catch (err) {
+    if (err instanceof ValidationError) {
+      if (!err.message.includes(fragment)) {
+        throw new Error(
+          `FAILED: ${label} — refused, but for the wrong reason: ${err.message}`,
+        );
+      }
+      console.log(`  ok  ${label} (${err.message})`);
+      return;
+    }
+    throw err;
+  }
+  throw new Error(`FAILED: ${label} — expected a rejection`);
 }
 
 async function expectRejection(label: string, body: () => Promise<unknown>) {
@@ -674,6 +702,139 @@ async function main() {
   for (const win of won) {
     if (win.status === "fulfilled") created.gameIds.push(win.value);
   }
+
+  console.log("Playing hours");
+
+  check(
+    "no window means any time",
+    playWindow.isWithinPlayWindow({ fromMinute: null, toMinute: null }) === true,
+  );
+  check(
+    "half a window is no window",
+    playWindow.isWithinPlayWindow({ fromMinute: 600, toMinute: null }) === true,
+  );
+
+  const at = (hour: number, minute = 0) =>
+    new Date(2026, 0, 15, hour, minute, 0);
+  const evening = { fromMinute: 16 * 60, toMinute: 20 * 60 };
+  check("inside the window", playWindow.isWithinPlayWindow(evening, at(18)) === true);
+  check("before it", playWindow.isWithinPlayWindow(evening, at(15, 59)) === false);
+  check("on the opening minute", playWindow.isWithinPlayWindow(evening, at(16)) === true);
+  check(
+    "on the closing minute the door is shut",
+    playWindow.isWithinPlayWindow(evening, at(20)) === false,
+  );
+
+  // A window that ends before it starts spans midnight.
+  const overnight = { fromMinute: 20 * 60, toMinute: 7 * 60 };
+  check("late evening", playWindow.isWithinPlayWindow(overnight, at(23)) === true);
+  check("small hours", playWindow.isWithinPlayWindow(overnight, at(3)) === true);
+  check("mid-afternoon is out", playWindow.isWithinPlayWindow(overnight, at(15)) === false);
+
+  check("a window reads as a sentence", playWindow.describeWindow(evening) === "16:00 to 20:00");
+  check("and no window says so", playWindow.describeWindow({ fromMinute: null, toMinute: null }) === "any time");
+  check("times parse", playWindow.parseMinute("16:30") === 16 * 60 + 30);
+  check("blank clears", playWindow.parseMinute("") === null);
+  check("nonsense is null", playWindow.parseMinute("half four") === null);
+  check("so is an impossible time", playWindow.parseMinute("25:00") === null);
+  check("and a round trip holds", playWindow.formatMinute(playWindow.parseMinute("07:05")!) === "07:05");
+
+  // Now the gate itself, against the database. Fresh players: everybody above
+  // is mid-game by this point, and "you're already playing" would let these
+  // checks pass while proving nothing.
+  const [dora, finn] = await Promise.all(
+    ["Dora", "Finn"].map((name) =>
+      usersService.create({
+        username: `${name.toLowerCase()}-${SUFFIX}`,
+        realName: name,
+        password: "smoke-password",
+        role: "child",
+        familyId,
+        actorId: null,
+      }),
+    ),
+  );
+  created.userIds.push(dora, finn);
+
+  // A window that opens two hours from now is shut, whatever the clock says.
+  const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
+  const closed = {
+    fromMinute: (nowMinutes + 120) % 1440,
+    toMinute: (nowMinutes + 180) % 1440,
+  };
+  await usersService.setPlayWindow(dora, closed, null);
+
+  await expectRejectionSaying(
+    "out of hours, you can't put a board out",
+    "out of hours",
+    () =>
+      offersService.create({
+        fromId: dora,
+        timeControlKey: "10+0",
+        color: "random",
+      }),
+  );
+  await expectRejectionSaying(
+    "or challenge somebody",
+    "out of hours",
+    () =>
+      challengesService.create({
+        fromId: dora,
+        toUsername: `finn-${SUFFIX}`,
+        timeControlKey: "10+0",
+        color: "random",
+      }),
+  );
+  await expectRejectionSaying(
+    "and a friend inside their own hours can't drag them in",
+    `dora-${SUFFIX} can't start a game right now`,
+    () =>
+      challengesService.create({
+        fromId: finn,
+        toUsername: `dora-${SUFFIX}`,
+        timeControlKey: "10+0",
+        color: "random",
+      }),
+  );
+
+  const openOffer = await offersService.create({
+    fromId: finn,
+    timeControlKey: "10+0",
+    color: "random",
+  });
+  await expectRejectionSaying(
+    "or take up a board that is out",
+    "out of hours",
+    () => offersService.accept(openOffer, dora),
+  );
+  await offersService.cancel(openOffer, finn);
+
+  await expectRejection("half a window is refused rather than half applied", () =>
+    usersService.setPlayWindow(dora, { fromMinute: 600, toMinute: null }, null),
+  );
+  await expectRejection("a window with no width is refused", () =>
+    usersService.setPlayWindow(dora, { fromMinute: 600, toMinute: 600 }, null),
+  );
+
+  // A game already running is never interrupted by closing time.
+  await usersService.setPlayWindow(dora, { fromMinute: null, toMinute: null }, null);
+  const inHours = await challengesService.create({
+    fromId: dora,
+    toUsername: `finn-${SUFFIX}`,
+    timeControlKey: "10+0",
+    color: "white",
+  });
+  check("clearing the window lets play resume", Number.isInteger(inHours));
+  const lateGame = await challengesService.accept(inHours, finn);
+  created.gameIds.push(lateGame);
+
+  await usersService.setPlayWindow(dora, closed, null);
+  const afterHours = await play(lateGame, dora, "e2e4");
+  check(
+    "closing time does not interrupt a game in progress",
+    afterHours.status === "active" && afterHours.ply === 1,
+  );
+  await usersService.setPlayWindow(dora, { fromMinute: null, toMinute: null }, null);
 
   console.log("Stats");
 

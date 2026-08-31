@@ -234,6 +234,37 @@ async function main() {
     avatar: before.avatar,
   });
 
+  // A parent may take the choice away again.
+  await usersService.setFlags(kid, { canCustomize: false }, parentId);
+  await expectRejection("a locked member can't rename themselves", () =>
+    usersService.updateProfile(kid, {
+      username: `chesspotato-${SUFFIX}`,
+      avatar: "knight",
+    }),
+  );
+  check(
+    "and the name they had is untouched",
+    (await usersService.getById(kid))?.username === before.username,
+  );
+  check(
+    "the board is still theirs to choose",
+    await usersService
+      .setBoardPreferences(kid, { boardStyle: "boxwood", pieceSet: "newsprint" })
+      .then(() => true),
+  );
+  const styled = await usersService.getById(kid);
+  check(
+    "and it is saved",
+    styled?.boardStyle === "boxwood" && styled?.pieceSet === "newsprint",
+  );
+  await expectRejection("a board that doesn't exist is refused", () =>
+    usersService.setBoardPreferences(kid, {
+      boardStyle: "marble",
+      pieceSet: "newsprint",
+    }),
+  );
+  await usersService.setFlags(kid, { canCustomize: true }, parentId);
+
   console.log("The roster");
 
   const clubRoster = await usersService.listClubMembers();
@@ -347,16 +378,56 @@ async function main() {
   check("parent switched chat off", muted?.chatEnabled === false);
   check(
     "canSpeak refuses with the parent's reason",
-    chatService.canSpeak({ chatEnabled: false, isMuted: false }).ok === false,
+    chatService.canSpeak({
+      chatEnabled: false,
+      gameChatEnabled: true,
+      isMuted: false,
+    }).ok === false,
   );
   await usersService.setFlags(kidIds[0], { chatEnabled: true }, parentId);
 
   await usersService.setFlags(kidIds[1], { isMuted: true }, adminId);
   check(
     "admin mute blocks speaking",
-    chatService.canSpeak({ chatEnabled: true, isMuted: true }).ok === false,
+    chatService.canSpeak({
+      chatEnabled: true,
+      gameChatEnabled: true,
+      isMuted: true,
+    }).ok === false,
   );
   await usersService.setFlags(kidIds[1], { isMuted: false }, adminId);
+
+  // The narrower switch: game rooms closed, clubhouse open.
+  const quietInGames = {
+    chatEnabled: true,
+    gameChatEnabled: false,
+    isMuted: false,
+  };
+  check(
+    "game chat off still allows the clubhouse",
+    chatService.canSpeak(quietInGames, CLUB_CHANNEL).ok === true,
+  );
+  check(
+    "and closes the game rooms",
+    chatService.canSpeak(quietInGames, "game:1").ok === false,
+  );
+  check(
+    "chat off closes the game rooms too",
+    chatService.canSpeak(
+      { chatEnabled: false, gameChatEnabled: true, isMuted: false },
+      "game:1",
+    ).ok === false,
+  );
+  await usersService.setFlags(kidIds[1], { gameChatEnabled: false }, parentId);
+  check(
+    "a parent can switch game chat off on its own",
+    (await usersService.getById(kidIds[1]))?.gameChatEnabled === false,
+  );
+  check(
+    "without touching the clubhouse",
+    (await usersService.getById(kidIds[1]))?.chatEnabled === true,
+  );
+  await usersService.setFlags(kidIds[1], { gameChatEnabled: true }, parentId);
 
   await chatService.softDelete(message.id, adminId);
   check(

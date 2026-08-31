@@ -1,10 +1,16 @@
-import { and, asc, eq, ne, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 import { db } from "../db";
 import { families, presence, users } from "../db/schema";
 import { hashPassword, MIN_PASSWORD_LENGTH, verifyPassword } from "../auth/password";
 import { deleteSessionsForUser } from "../auth/session-store";
 import { isAvatarKey } from "../avatars";
+import { isBoardStyleKey, isPieceSetKey } from "../board-styles";
 import { PRESENCE_STALE_SECONDS } from "../config";
+import {
+  describeWindow,
+  isWithinPlayWindow,
+  MINUTES_IN_DAY,
+} from "../play-window";
 import {
   fail,
   normalizeUsername,
@@ -26,6 +32,12 @@ export type Member = {
   avatar: string;
   isActive: boolean;
   chatEnabled: boolean;
+  gameChatEnabled: boolean;
+  canCustomize: boolean;
+  playFromMinute: number | null;
+  playToMinute: number | null;
+  boardStyle: string;
+  pieceSet: string;
   isMuted: boolean;
   email: string | null;
   createdAt: Date;
@@ -42,6 +54,12 @@ const memberColumns = {
   avatar: users.avatar,
   isActive: users.isActive,
   chatEnabled: users.chatEnabled,
+  gameChatEnabled: users.gameChatEnabled,
+  canCustomize: users.canCustomize,
+  playFromMinute: users.playFromMinute,
+  playToMinute: users.playToMinute,
+  boardStyle: users.boardStyle,
+  pieceSet: users.pieceSet,
   isMuted: users.isMuted,
   email: users.email,
   createdAt: users.createdAt,
@@ -317,10 +335,16 @@ export async function updateProfile(
   if (!isAvatarKey(avatarRaw)) fail("Pick one of the available avatars.");
 
   const [current] = await db
-    .select({ username: users.username })
+    .select({ username: users.username, canCustomize: users.canCustomize })
     .from(users)
     .where(eq(users.id, userId));
   if (!current) fail("That account no longer exists.");
+
+  // A parent may take this away. The board and the pieces are not covered:
+  // nobody else sees those.
+  if (!current.canCustomize) {
+    fail("The grown-ups in your family look after your name and avatar.");
+  }
 
   if (current.username !== username) {
     const taken = await db
@@ -390,13 +414,123 @@ export async function changeOwnPassword(
 }
 
 /**
- * Toggles owned by an admin (`isActive`, `isMuted`) or a parent
- * (`isActive`, `chatEnabled`). Authorization is the caller's job — see
- * lib/auth/guards.ts.
+ * The board and the pieces this member sees.
+ *
+ * Not covered by `canCustomize`: a parent switching off "choose your own name"
+ * is about what the club is shown, and nobody but the member ever sees which
+ * squares they like. Unknown keys are refused rather than silently defaulted,
+ * so a stale form cannot quietly reset somebody's board.
+ */
+export async function setBoardPreferences(
+  userId: number,
+  input: { boardStyle: unknown; pieceSet: unknown },
+) {
+  const style = String(input.boardStyle ?? "");
+  const set = String(input.pieceSet ?? "");
+  if (!isBoardStyleKey(style)) fail("Pick one of the boards.");
+  if (!isPieceSetKey(set)) fail("Pick one of the piece sets.");
+
+  await db
+    .update(users)
+    .set({ boardStyle: style, pieceSet: set })
+    .where(eq(users.id, userId));
+}
+
+/**
+ * Refuse if either player is outside their playing hours.
+ *
+ * Called wherever a game can start — creating or accepting a challenge, putting
+ * out an offer or taking one up. Both sides are checked: a child whose evening
+ * is over should not be pulled into a game by a friend whose isn't, and the
+ * friend should be told why rather than left tapping a button that does
+ * nothing.
+ *
+ * It does not touch a game already running. See lib/play-window.ts.
+ */
+export async function assertCanStartGame(userIds: number[], selfId: number) {
+  const rows = await db
+    .select({
+      id: users.id,
+      username: users.username,
+      playFromMinute: users.playFromMinute,
+      playToMinute: users.playToMinute,
+    })
+    .from(users)
+    .where(inArray(users.id, userIds));
+
+  const now = new Date();
+
+  for (const row of rows) {
+    const window = {
+      fromMinute: row.playFromMinute,
+      toMinute: row.playToMinute,
+    };
+    if (isWithinPlayWindow(window, now)) continue;
+
+    fail(
+      row.id === selfId
+        ? `Chess is out of hours for you right now — you can play ${describeWindow(window)}.`
+        : `${row.username} can't start a game right now: they can play ${describeWindow(window)}.`,
+    );
+  }
+}
+
+/**
+ * A child's playing hours, as minutes from local midnight.
+ *
+ * Both null clears the window. Passing one and not the other is refused rather
+ * than half-applied — half a window is not a window, and a parent who typed
+ * only one end meant to type both. See lib/play-window.ts for what the pair
+ * means, including the wrap past midnight.
+ */
+export async function setPlayWindow(
+  userId: number,
+  window: { fromMinute: number | null; toMinute: number | null },
+  actorId: number | null,
+) {
+  const { fromMinute, toMinute } = window;
+
+  if ((fromMinute === null) !== (toMinute === null)) {
+    fail("Playing hours need both a start and an end, or neither.");
+  }
+  for (const minute of [fromMinute, toMinute]) {
+    if (minute === null) continue;
+    if (!Number.isInteger(minute) || minute < 0 || minute >= MINUTES_IN_DAY) {
+      fail("That isn't a time of day.");
+    }
+  }
+  if (fromMinute !== null && fromMinute === toMinute) {
+    fail("Playing hours that start and end at the same time allow nothing.");
+  }
+
+  await db
+    .update(users)
+    .set({ playFromMinute: fromMinute, playToMinute: toMinute })
+    .where(eq(users.id, userId));
+
+  await audit.record({
+    actorId,
+    action: "user.set_play_window",
+    targetType: "user",
+    targetId: userId,
+    detail: { fromMinute, toMinute },
+  });
+}
+
+/**
+ * Toggles owned by an admin (`isActive`, `isMuted`) or a parent (`isActive`,
+ * `chatEnabled`, `gameChatEnabled`, `canCustomize`). Authorization is the
+ * caller's job — see lib/auth/guards.ts.
  */
 export async function setFlags(
   userId: number,
-  flags: { isActive?: boolean; chatEnabled?: boolean; isMuted?: boolean },
+  flags: {
+    isActive?: boolean;
+    chatEnabled?: boolean;
+    gameChatEnabled?: boolean;
+    canCustomize?: boolean;
+    isMuted?: boolean;
+  },
   actorId: number | null,
 ) {
   await db.update(users).set(flags).where(eq(users.id, userId));

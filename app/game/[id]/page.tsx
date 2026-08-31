@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth/guards";
 import * as chat from "@/lib/services/chat";
 import * as games from "@/lib/services/games";
+import * as users from "@/lib/services/users";
 import { gameChannel } from "@/realtime/protocol";
 import { GameRoom } from "@/app/components/GameRoom";
 import { Shell } from "@/app/components/Shell";
@@ -22,13 +23,15 @@ export default async function GamePage({ params }: PageProps<"/game/[id]">) {
   const gameId = Number(id);
   if (!Number.isInteger(gameId)) notFound();
 
-  const [state, messages] = await Promise.all([
+  const [state, messages, viewer] = await Promise.all([
     games.get(gameId),
     chat.listVisible(gameChannel(gameId), 100),
+    // For the board and the pieces: everybody sits at their own board.
+    users.getById(me.id),
   ]);
   if (!state) notFound();
 
-  const speak = chat.canSpeak(me);
+  const speak = chat.canSpeak(me, gameChannel(gameId));
   const playing = me.id === state.white.id || me.id === state.black.id;
 
   return (
@@ -46,6 +49,8 @@ export default async function GamePage({ params }: PageProps<"/game/[id]">) {
         gameId={gameId}
         viewerId={me.id}
         canChat={speak.ok}
+        boardStyle={viewer?.boardStyle ?? null}
+        pieceSet={viewer?.pieceSet ?? null}
         chatBlockedReason={speak.ok ? null : speak.reason}
         initialGame={{
           ...state,

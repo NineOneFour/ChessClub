@@ -215,16 +215,25 @@ body {
   transform: translateY(0.145em);
 }
 
+/*
+ * Fill, outline and outline width come from the member's chosen piece set, as
+ * custom properties set on the board — Tailwind cannot generate a class for a
+ * colour picked at runtime. The fallbacks are the Score sheet set, so a piece
+ * rendered outside a board (the promotion picker, the avatars) still looks
+ * right without anybody having to pass it a set.
+ */
 .piece-white {
-  color: #fff;
-  -webkit-text-stroke: 1.4px var(--color-ink);
+  color: var(--piece-white-fill, #fff);
+  -webkit-text-stroke: var(--piece-stroke-width, 1.4px)
+    var(--piece-white-stroke, var(--color-ink));
   paint-order: stroke fill;
   text-shadow: 0 1px 1px rgb(25 28 52 / 0.25);
 }
 
 .piece-black {
-  color: var(--color-ink);
-  -webkit-text-stroke: 1.4px var(--color-ink);
+  color: var(--piece-black-fill, var(--color-ink));
+  -webkit-text-stroke: var(--piece-stroke-width, 1.4px)
+    var(--piece-black-stroke, var(--color-ink));
   paint-order: stroke fill;
   text-shadow: 0 1px 1px rgb(25 28 52 / 0.2);
 }

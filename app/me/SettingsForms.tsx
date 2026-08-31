@@ -3,16 +3,38 @@
 import { useActionState } from "react";
 import { Field, FormError, SubmitButton } from "@/app/components/Form";
 import { AvatarPicker } from "./AvatarPicker";
-import { changeMyPassword, updateMyProfile } from "./actions";
+import { BoardPicker } from "./BoardPicker";
+import {
+  changeMyPassword,
+  updateMyBoard,
+  updateMyProfile,
+} from "./actions";
 
 export function ProfileForm({
   username,
   avatar,
+  canCustomize,
 }: {
   username: string;
   avatar: string;
+  /** A parent may take this away — see design.md §15. */
+  canCustomize: boolean;
 }) {
   const [state, action] = useActionState(updateMyProfile, undefined);
+
+  if (!canCustomize) {
+    return (
+      <div className="sheet space-y-2 p-5">
+        <p className="text-sm">
+          You&apos;re <span className="font-mono">@{username}</span> in the club.
+        </p>
+        <p className="text-sm text-ink-soft">
+          The grown-ups in your family look after your name and your avatar. The
+          board and the pieces below are still yours to pick.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <form action={action} className="sheet space-y-4 p-5">
@@ -57,6 +79,24 @@ export function PasswordForm({ minLength }: { minLength: number }) {
         pendingLabel="Changing"
         variant="quiet"
       />
+    </form>
+  );
+}
+
+export function BoardForm({
+  boardStyle,
+  pieceSet,
+}: {
+  boardStyle: string;
+  pieceSet: string;
+}) {
+  const [state, action] = useActionState(updateMyBoard, undefined);
+
+  return (
+    <form action={action} className="sheet space-y-4 p-5">
+      <BoardPicker currentStyle={boardStyle} currentSet={pieceSet} />
+      <FormError state={state} />
+      <SubmitButton label="Save board" pendingLabel="Saving" variant="quiet" />
     </form>
   );
 }

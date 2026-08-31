@@ -66,18 +66,40 @@ export async function post(input: {
 }
 
 /**
- * A member may speak unless a parent has switched their chat off or an admin
- * has muted them. Returns the reason so the UI can say which it is.
+ * May this member speak in this channel?
+ *
+ * Three switches, and the order they are tested in is the order of authority:
+ *
+ * - An **admin mute** silences a member everywhere. Only an admin lifts it.
+ * - **Chat off** is the parent's master switch: no clubhouse, no game rooms.
+ * - **Game chat off** is the narrower one, and closes the game rooms while
+ *   leaving the clubhouse alone. A parent who is happy with the clubhouse but
+ *   not with a running commentary during somebody's game wants this and not the
+ *   master switch.
+ *
+ * Returns the reason so the UI can say which it is, in words a child can act
+ * on. Both the web tier and the realtime service call this — it is the check,
+ * not a hint for the UI.
  */
-export function canSpeak(member: {
-  chatEnabled: boolean;
-  isMuted: boolean;
-}): { ok: true } | { ok: false; reason: string } {
+export function canSpeak(
+  member: {
+    chatEnabled: boolean;
+    gameChatEnabled: boolean;
+    isMuted: boolean;
+  },
+  channel: string = CLUB_CHANNEL,
+): { ok: true } | { ok: false; reason: string } {
+  if (member.isMuted) {
+    return { ok: false, reason: "You're muted in chat right now." };
+  }
   if (!member.chatEnabled) {
     return { ok: false, reason: "Chat is switched off for your account." };
   }
-  if (member.isMuted) {
-    return { ok: false, reason: "You're muted in the clubhouse right now." };
+  if (channel !== CLUB_CHANNEL && !member.gameChatEnabled) {
+    return {
+      ok: false,
+      reason: "Chatting during games is switched off for your account.",
+    };
   }
   return { ok: true };
 }

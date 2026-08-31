@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, isNull, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { db } from "../db";
 import {
   gameMoves,
@@ -675,6 +675,28 @@ export async function listForUser(
     .where(or(eq(games.whiteId, userId), eq(games.blackId, userId)))
     // Unfinished games first, then most recent. `asc(finishedAt)` would put
     // them last: Postgres sorts NULLs last on ASC.
+    .orderBy(sql`${games.finishedAt} is null desc`, desc(games.id))
+    .limit(limit);
+  return rows.map(toSummary);
+}
+
+/**
+ * Games played by any of these members, newest first.
+ *
+ * For a parent reviewing their family: one list rather than one per child,
+ * because a parent wants to know what has been going on, not to audit each
+ * child separately.
+ */
+export async function listForUsers(
+  userIds: number[],
+  limit = 30,
+): Promise<GameSummary[]> {
+  if (userIds.length === 0) return [];
+
+  const rows = await summaryQuery()
+    .where(
+      or(inArray(games.whiteId, userIds), inArray(games.blackId, userIds)),
+    )
     .orderBy(sql`${games.finishedAt} is null desc`, desc(games.id))
     .limit(limit);
   return rows.map(toSummary);

@@ -1,14 +1,13 @@
 import Link from "next/link";
 import type { SessionUser } from "@/lib/auth/session";
-import { signOut } from "@/app/actions";
 import { UserMenu } from "./UserMenu";
 
 /**
  * The page frame: masthead, one rubber stamp, and the navigation a member is
  * actually allowed to use. Children never see parent or admin links.
  *
- * The links are the places the club goes; the two pages about *you* are behind
- * your own name, in `UserMenu`.
+ * The links are the places the club goes; everything about *you* — your card,
+ * your settings, signing out — is behind your own name, in `UserMenu`.
  */
 export function Shell({
   user,
@@ -48,11 +47,6 @@ export function Shell({
               {link.label}
             </Link>
           ))}
-          <form action={signOut}>
-            <button type="submit" className="eyebrow hover:text-stamp">
-              Sign out
-            </button>
-          </form>
           <UserMenu
             username={user.username}
             avatar={user.avatar}

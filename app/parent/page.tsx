@@ -3,8 +3,11 @@ import { requireParent } from "@/lib/auth/guards";
 import { MIN_PASSWORD_LENGTH } from "@/lib/auth/password";
 import { CLUB_CHANNEL } from "@/lib/db/schema";
 import * as chat from "@/lib/services/chat";
+import * as games from "@/lib/services/games";
 import * as users from "@/lib/services/users";
+import { describeWindow } from "@/lib/play-window";
 import { Avatar } from "@/app/components/Avatar";
+import { GameList } from "@/app/components/GameList";
 import { SectionHeading } from "@/app/components/SectionHeading";
 import { Shell } from "@/app/components/Shell";
 import { AddChildForm } from "./AddChildForm";
@@ -15,9 +18,13 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "My family" };
 
 /**
- * One page per family: the children, the switches over each of them, and what
- * they've been saying. Everything a parent needs is here rather than spread
- * over a settings tree.
+ * One page per family: the children, the switches over each of them, what
+ * they've been playing and what they've been saying. Everything a parent needs
+ * is here rather than spread over a settings tree.
+ *
+ * The games are the whole family's in one list rather than one list per child,
+ * because a parent wants to know what has been going on and not to audit each
+ * child in turn.
  */
 export default async function ParentPage() {
   const parent = await requireParent();
@@ -39,10 +46,10 @@ export default async function ParentPage() {
 
   const children = await users.listChildrenOfFamily(parent.familyId);
   const childIds = new Set(children.map((child) => child.id));
-  const transcript = await chat.listForReview({
-    channel: CLUB_CHANNEL,
-    limit: 300,
-  });
+  const [transcript, theirGames] = await Promise.all([
+    chat.listForReview({ channel: CLUB_CHANNEL, limit: 300 }),
+    games.listForUsers([...childIds], 30),
+  ]);
   const theirs = transcript.filter((message) => childIds.has(message.userId));
 
   return (
@@ -95,6 +102,36 @@ export default async function ParentPage() {
                               </span>
                             </li>
                             <li>
+                              game chat{" "}
+                              <span
+                                className={
+                                  child.gameChatEnabled
+                                    ? "text-live"
+                                    : "text-stamp"
+                                }
+                              >
+                                {child.gameChatEnabled ? "on" : "off"}
+                              </span>
+                            </li>
+                            <li>
+                              plays{" "}
+                              <span
+                                className={
+                                  child.playFromMinute === null
+                                    ? ""
+                                    : "text-brass"
+                                }
+                              >
+                                {describeWindow({
+                                  fromMinute: child.playFromMinute,
+                                  toMinute: child.playToMinute,
+                                })}
+                              </span>
+                            </li>
+                            {!child.canCustomize && (
+                              <li className="text-stamp">name locked</li>
+                            )}
+                            <li>
                               last here{" "}
                               {child.lastSeenAt
                                 ? child.lastSeenAt.toLocaleDateString()
@@ -121,6 +158,18 @@ export default async function ParentPage() {
                 ))}
               </ul>
             )}
+          </section>
+
+          <section>
+            <SectionHeading
+              label="What they've been playing"
+              count={`${theirGames.length}`}
+            />
+            <GameList
+              games={theirGames}
+              viewerId={parent.id}
+              empty="No games yet."
+            />
           </section>
 
           <section>

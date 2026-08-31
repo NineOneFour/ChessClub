@@ -24,6 +24,25 @@ export async function updateMyProfile(
   });
 }
 
+/**
+ * The board and the pieces. Its own action because it is its own decision: a
+ * parent may switch off choosing your own name without touching this.
+ */
+export async function updateMyBoard(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  return withFormErrors(async () => {
+    const me = await requireUser();
+    await users.setBoardPreferences(me.id, {
+      boardStyle: formData.get("boardStyle"),
+      pieceSet: formData.get("pieceSet"),
+    });
+    revalidatePath("/me");
+    return { ok: "Board saved. It's on every board you sit at." };
+  });
+}
+
 export async function changeMyPassword(
   _prev: FormState,
   formData: FormData,

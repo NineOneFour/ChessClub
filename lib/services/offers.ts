@@ -9,6 +9,7 @@ import {
 import { fail } from "../validation";
 import * as games from "./games";
 import { COLOR_CHOICES, type ColorChoice } from "./challenges";
+import * as usersService from "./users";
 
 /**
  * Open offers — "I'll play anyone".
@@ -68,6 +69,7 @@ export async function create(input: {
   if (await games.activeGameFor(input.fromId)) {
     fail("Finish the game you're in first.");
   }
+  await usersService.assertCanStartGame([input.fromId], input.fromId);
 
   try {
     const rows = await db
@@ -133,8 +135,12 @@ export async function accept(
   }
   // Checked here only for the wording; the `ne` below is what actually stops
   // it, race or no race.
-  if ((await offererId(offerId)) === userId) {
+  const owner = await offererId(offerId);
+  if (owner === userId) {
     fail("That's your own board. Wait for somebody to sit down.");
+  }
+  if (owner !== null) {
+    await usersService.assertCanStartGame([userId, owner], userId);
   }
 
   const claimed = await db
