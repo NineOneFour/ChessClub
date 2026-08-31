@@ -1,26 +1,214 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/*
+ * Visual direction: the club score sheet.
+ *
+ * A small chess club runs on paper — a ruled score sheet with numbered moves
+ * down a narrow gutter, a rubber stamp on the front, results pinned to a
+ * board. Every list in this app (the room, the chat, the roster) is set as
+ * ruled numbered rows, because chess genuinely is a numbered sequence, so the
+ * numbering carries information rather than decorating.
+ *
+ * Colours come from a carbon-copy score sheet: grey-lilac newsprint, violet
+ * rule lines, ink navy, and one red stamp accent borrowed from the flag on a
+ * mechanical chess clock.
+ */
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+@theme {
+  --color-paper: #e8e9ee;
+  --color-sheet: #f8f8fa;
+  --color-ink: #191c34;
+  --color-ink-soft: #5a5f7d;
+  --color-rule: #c6c9dc;
+  --color-stamp: #c8202a;
+  --color-live: #17795e;
+  --color-brass: #9d7420;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --font-display: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-instrument), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-dm-mono), ui-monospace, monospace;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  /* Faint ruled paper behind everything. */
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 31px,
+    rgb(198 201 220 / 0.35) 31px,
+    rgb(198 201 220 / 0.35) 32px
+  );
+}
+
+/* --- Typography ---------------------------------------------------------- */
+
+.masthead {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 0.95;
+}
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-ink-soft);
+}
+
+/* --- The stamp ----------------------------------------------------------- */
+/*
+ * The one loud element: a rubber-stamp block, rotated and slightly ragged, as
+ * a real club secretary would have thumped onto the sheet. Used exactly once
+ * per page.
+ */
+.stamp {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--color-stamp);
+  border: 2px solid var(--color-stamp);
+  padding: 0.35rem 0.6rem 0.3rem;
+  transform: rotate(-3.5deg);
+  opacity: 0.85;
+  border-radius: 2px;
+  display: inline-block;
+  white-space: nowrap;
+}
+
+/* --- Sheets -------------------------------------------------------------- */
+
+.sheet {
+  background-color: var(--color-sheet);
+  border: 1px solid var(--color-rule);
+  box-shadow: 0 1px 0 rgb(25 28 52 / 0.06);
+}
+
+/*
+ * A ruled, numbered list. The gutter holds the row number in mono, the way a
+ * score sheet holds the move number.
+ */
+.ruled > * + * {
+  border-top: 1px solid var(--color-rule);
+}
+
+.gutter {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  color: var(--color-ink-soft);
+  font-variant-numeric: tabular-nums;
+  min-width: 2.25rem;
+  text-align: right;
+  padding-top: 0.15rem;
+  user-select: none;
+}
+
+/* --- Controls ------------------------------------------------------------ */
+
+.field {
+  width: 100%;
+  background-color: #fff;
+  border: 1px solid var(--color-rule);
+  border-radius: 2px;
+  padding: 0.5rem 0.65rem;
+  font-family: var(--font-sans);
+  color: var(--color-ink);
+}
+
+.field:focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 1px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-radius: 2px;
+  padding: 0.5rem 0.85rem;
+  border: 1px solid var(--color-ink);
+  background-color: var(--color-ink);
+  color: var(--color-sheet);
+  cursor: pointer;
+  transition: transform 120ms ease, background-color 120ms ease;
+}
+
+.btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-quiet {
+  background-color: transparent;
+  color: var(--color-ink);
+  border-color: var(--color-rule);
+}
+
+.btn-quiet:hover:not(:disabled) {
+  border-color: var(--color-ink);
+}
+
+.btn-warn {
+  background-color: transparent;
+  color: var(--color-stamp);
+  border-color: var(--color-stamp);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+
+  .btn:hover:not(:disabled) {
+    transform: none;
+  }
+}
+
+/* --- Pieces -------------------------------------------------------------- */
+/*
+ * Chess pieces are Unicode glyphs, not images: nothing to license, nothing to
+ * ship, and they scale with the board. The solid glyphs are used for both
+ * colours — the hollow outline glyphs for white are illegible at board size —
+ * with white pieces filled white and outlined in ink.
+ */
+.piece-white,
+.piece-black {
+  font-family: "Noto Sans Symbols 2", "DejaVu Sans", "Segoe UI Symbol",
+    "Apple Symbols", serif;
+  font-feature-settings: normal;
+}
+
+.piece-white {
+  color: #fff;
+  -webkit-text-stroke: 1.4px var(--color-ink);
+  paint-order: stroke fill;
+  text-shadow: 0 1px 1px rgb(25 28 52 / 0.25);
+}
+
+.piece-black {
+  color: var(--color-ink);
+  -webkit-text-stroke: 1.4px var(--color-ink);
+  paint-order: stroke fill;
+  text-shadow: 0 1px 1px rgb(25 28 52 / 0.2);
 }

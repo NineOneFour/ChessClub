@@ -4,23 +4,46 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:realtime": "tsx watch realtime/server.ts",
+    "dev:all": "concurrently -n web,realtime -c cyan,magenta \"npm:dev\" \"npm:dev:realtime\"",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "realtime": "tsx realtime/server.ts",
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "seed:admin": "tsx scripts/seed-admin.ts",
+    "smoke:club": "tsx scripts/smoke-club.ts",
+    "smoke:realtime": "tsx scripts/smoke-realtime.ts",
+    "smoke:chess": "tsx scripts/smoke-chess.ts",
+    "smoke:play": "tsx scripts/smoke-play.ts"
   },
   "dependencies": {
+    "@node-rs/argon2": "^2.1.0",
+    "chess.js": "^1.4.0",
+    "drizzle-orm": "^0.45.2",
     "next": "16.3.3",
+    "postgres": "^3.4.9",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "ws": "^8.21.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/ws": "^8.18.1",
+    "concurrently": "^10.0.5",
+    "dotenv": "^17.4.2",
+    "drizzle-kit": "^0.31.10",
     "eslint": "^9",
     "eslint-config-next": "16.3.3",
     "tailwindcss": "^4",
+    "tsx": "^4.23.12",
     "typescript": "^5"
   }
 }
