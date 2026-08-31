@@ -671,13 +671,14 @@ function GameChat({
           <ul className="space-y-1.5">
             {messages.map((message) => (
               <li key={message.id} className="text-sm leading-snug">
-                <span
-                  className={`font-semibold ${
+                <Link
+                  href={`/profile/${message.username}`}
+                  className={`font-semibold hover:underline ${
                     message.userId === viewerId ? "text-brass" : ""
                   }`}
                 >
                   {message.username}
-                </span>{" "}
+                </Link>{" "}
                 <GrownUpTag role={message.role} />{" "}
                 <span className="break-words">{message.body}</span>
               </li>

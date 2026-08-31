@@ -556,13 +556,14 @@ function Transcript({
             <div className="min-w-0 flex-1">
               {!sameAuthor && (
                 <div className="flex items-baseline gap-2">
-                  <span
-                    className={`text-sm font-semibold ${
+                  <Link
+                    href={`/profile/${message.username}`}
+                    className={`text-sm font-semibold hover:underline ${
                       message.userId === meId ? "text-brass" : ""
                     }`}
                   >
                     {message.username}
-                  </span>
+                  </Link>
                   <GrownUpTag role={message.role} />
                   <time
                     dateTime={message.createdAt}

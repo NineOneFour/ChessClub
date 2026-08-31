@@ -499,6 +499,17 @@ The record and the game list are the same components on the card and the public
 profile (`RecordPanel`, `GameList`). If your own card and everyone else's view
 of it disagreed about your record, one of them would be wrong.
 
+**Getting to them.** The main navigation is where the *club* goes — clubhouse,
+games, and the family and admin pages for those who have them. The two pages
+about you are behind your own name in the header (`UserMenu`), which is where
+anybody would look. Sign out stays outside the menu: a child who wants to stop
+playing should not have to find it inside something.
+
+**A username in chat is a link to that member's profile**, in the club chat and
+in a game room. It is the shortest path from "who is this?" to the answer, and
+it costs nothing: `chat.ts` joins `users.username` live, so a message always
+carries the author's current name and the link stays good after a rename.
+
 **Rivalries are private on purpose.** "Who keeps beating me" is a useful thing
 to know about yourself and an unkind thing for eight children to know about each
 other. `nemesis()` needs a losing record over at least `NEMESIS_MIN_GAMES`

@@ -1,11 +1,14 @@
 import Link from "next/link";
 import type { SessionUser } from "@/lib/auth/session";
-import { Avatar } from "./Avatar";
 import { signOut } from "@/app/actions";
+import { UserMenu } from "./UserMenu";
 
 /**
  * The page frame: masthead, one rubber stamp, and the navigation a member is
  * actually allowed to use. Children never see parent or admin links.
+ *
+ * The links are the places the club goes; the two pages about *you* are behind
+ * your own name, in `UserMenu`.
  */
 export function Shell({
   user,
@@ -19,8 +22,6 @@ export function Shell({
   const links = [
     { href: "/", label: "Clubhouse" },
     { href: "/games", label: "Games" },
-    { href: "/card", label: "My card" },
-    { href: "/me", label: "Settings" },
     ...(user.role === "parent" || user.role === "admin"
       ? [{ href: "/parent", label: "My family" }]
       : []),
@@ -52,10 +53,11 @@ export function Shell({
               Sign out
             </button>
           </form>
-          <Link href="/card" className="flex items-center gap-2">
-            <Avatar avatar={user.avatar} role={user.role} size="sm" />
-            <span className="font-mono text-xs">{user.username}</span>
-          </Link>
+          <UserMenu
+            username={user.username}
+            avatar={user.avatar}
+            role={user.role}
+          />
         </nav>
       </header>
 
