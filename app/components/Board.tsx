@@ -264,7 +264,7 @@ export function Board({
                 <span
                   aria-hidden
                   className={[
-                    "pointer-events-none relative leading-none",
+                    "piece-glyph pointer-events-none relative leading-none",
                     "text-[min(9vw,3.2rem)] sm:text-[min(6vw,3.4rem)]",
                     piece.color === "white" ? "piece-white" : "piece-black",
                     dragging === square ? "opacity-40" : "",
@@ -325,7 +325,9 @@ function PromotionPicker({
               color === "white" ? "piece-white" : "piece-black"
             }`}
           >
-            <span aria-hidden>{GLYPHS[role]}</span>
+            <span aria-hidden className="piece-glyph">
+              {GLYPHS[role]}
+            </span>
           </button>
         ))}
       </div>

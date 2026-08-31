@@ -18,14 +18,15 @@ Guidance for Claude Code when working in this repository.
 invitations, profiles, presence and club chat all work end to end, verified by
 `npm run smoke:club` and `npm run smoke:realtime`.
 
-**Phase 2 (Chess) is part-built.** The server side is done and verified by
-`npm run smoke:chess` (87 checks): rules, clocks, challenges, moves, draws,
-resignation, flag falls, completion, history and PGN.
+**Phase 2 (Chess) is all but complete.** Rules, clocks, challenges, open
+offers, rematches, moves, draws, resignation, flag falls, completion, history
+and PGN are verified by `npm run smoke:chess`; the board, the game rooms,
+spectating, reconnection and game chat by `npm run smoke:play`.
 
-Not built yet: the board, the realtime game rooms, the play/watch/review pages,
-spectating and game chat. **Nothing in the UI reaches the engine**, and the
-clubhouse and member card still say there is nothing to play — which is still
-true. Keep it that way until the board exists.
+Not built yet: **stepping through a finished game** move by move. The score
+sheet lists the moves and the board shows the final position, but nothing
+navigates between them — which is what `game_moves.fen_after` is for.
+That is the last item of phase 2's "and can review the game afterward".
 
 ## Scale, and why it matters
 
@@ -99,6 +100,14 @@ A page never writes SQL. A service never imports from `app/`.
 - **The administrator may belong to a family** (*My family* on the admin page),
   which is what makes one account both club secretary and parent. It is also
   the only way a family is created without an invitation.
+- **A rematch is a challenge, not a new mechanism.** **Play again** creates an
+  ordinary row in `challenges` with the colours swapped, so the first tap
+  offers and the second accepts, and the offer also shows in the clubhouse.
+  This is why `useGameSocket` handles `challenges` and `gameStarted` frames.
+- **An open offer is withdrawn when its owner disconnects**, and every offer is
+  expired on realtime startup — a board left out by somebody who has gone home
+  would start a game against an empty chair. See `design.md` §10. This is why
+  `offers.expireFor()` is called from `unregister()`.
 - **The database is the authority on every game.** Moves go through one locked
   transaction that replays the move list; the realtime service is transport and
   a clock watchdog, never the source of truth. Don't cache game state in the
@@ -131,7 +140,8 @@ npm run db:studio        # drizzle-studio
 npm run seed:admin       # create/reset the administrator (env-driven)
 npm run smoke:club       # service layer, end to end, against the real DB
 npm run smoke:realtime   # the socket, end to end (needs the service running)
-npm run smoke:chess      # rules, clocks, challenges, games, PGN
+npm run smoke:chess      # rules, clocks, challenges, offers, games, PGN
+npm run smoke:play       # a whole game over the socket, with a spectator
 npx tsx scripts/dev-fixture.ts   # two families, four kids, a conversation
 ```
 

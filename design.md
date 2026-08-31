@@ -271,6 +271,7 @@ lib/
     users.ts invitations.ts chat.ts presence.ts audit.ts
     games.ts                    transactional game state, history, PGN
     challenges.ts               challenge lifecycle, colour assignment
+    offers.ts                   open offers: put a board out, take it up
 realtime/
   server.ts                     the WebSocket service
   protocol.ts                    frame types, shared with the browser
@@ -366,14 +367,55 @@ Decisions inside that:
 
 ### Challenges
 
-No matchmaking, no seek pool, no rating-based pairing: you challenge somebody
-you can see in the clubhouse and they say yes or no. A partial unique index
+No matchmaking and no rating-based pairing: you challenge somebody you can see
+in the clubhouse and they say yes or no. A partial unique index
 (`challenges_open_pair_key`, `where status = 'open'`) means a kid mashing the
 button cannot build a queue. Accepting claims the challenge with a conditional
 `UPDATE`, so two taps cannot produce two games, and accepting expires every
 other open challenge involving either player.
 
 `random` colour is resolved in exactly one place: `challenges.accept()`.
+
+### Play again
+
+A finished game offers **Play again** to both players: same time control,
+colours swapped, as over the board.
+
+It is an ordinary challenge, not a new mechanism — which buys three things.
+The first tap offers and the second accepts, so it is symmetrical and neither
+player has to work out whose turn it is to ask. Nothing new has to be stored:
+the offer is a row in `challenges`, so it survives a reload, and if a player
+wanders back to the clubhouse it is waiting for them there. And the socket
+already sends a member their challenge list on every change, so the offer
+reaches the other player *on the finished-game page they are still sitting on*
+— the game room listens for `challenges` and `gameStarted` for exactly this.
+
+### Open offers
+
+A challenge names an opponent. An **offer** doesn't: **Start a game** puts a
+board out with a time control and a colour, and the first member to tap **Play**
+gets the game. It exists because the person a kid wants to play is usually
+"whoever is here", and making them guess who is free is worse than putting a
+board out and waiting.
+
+Same protections as a challenge, plus one more:
+
+- One open offer per member (`game_offers_open_from_key`, `where status =
+  'open'`), so the button cannot build a queue.
+- Accepting claims the row with a conditional `UPDATE` that also excludes the
+  offerer, so two members tapping at the same moment produce exactly one game
+  and the loser is told the board has gone.
+- Starting a game any way at all takes both players' boards in — accepting an
+  offer and accepting a challenge each expire the other's open offers.
+- **An offer is withdrawn when its owner's last socket closes**, and every open
+  offer is expired when the realtime service starts. A board left out by
+  somebody who has gone home would otherwise start a game against an empty
+  chair. This is the one place an offer differs from a challenge, which
+  survives a disconnection because it is addressed to a person who can answer
+  later.
+
+The offer list is public to the club, so it is the one thing the socket
+broadcasts to everybody rather than sending to one member.
 
 ## 11. Self-hosting
 

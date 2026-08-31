@@ -7,18 +7,19 @@ import type {
   ServerFrame,
   WireChallenge,
   WireGameCard,
+  WireOffer,
 } from "@/realtime/protocol";
 import { realtimeUrl } from "./useGameSocket";
 
 export type ConnectionState = "connecting" | "open" | "closed";
 
 /**
- * The browser half of the clubhouse link: presence, club chat, challenges and
- * the list of games in progress, all over the one socket.
+ * The browser half of the clubhouse link: presence, club chat, challenges,
+ * open offers and the list of games in progress, all over the one socket.
  *
  * Reconnects with a backoff, because a kid's laptop closing and reopening is
  * the normal case, not the exceptional one. Server state always wins: presence
- * and challenges arrive as full lists rather than diffs, so a dropped
+ * challenges and offers arrive as full lists rather than diffs, so a dropped
  * connection cannot leave something stale on screen.
  */
 export function useClubSocket({
@@ -27,6 +28,7 @@ export function useClubSocket({
   initialIncoming,
   initialOutgoing,
   initialLiveGames,
+  initialOffers,
   onGameStarted,
 }: {
   initialOnline: OnlineMember[];
@@ -34,6 +36,7 @@ export function useClubSocket({
   initialIncoming: WireChallenge[];
   initialOutgoing: WireChallenge[];
   initialLiveGames: WireGameCard[];
+  initialOffers: WireOffer[];
   /** Called when a game you're in begins, so the page can go to the board. */
   onGameStarted?: (gameId: number) => void;
 }) {
@@ -45,6 +48,7 @@ export function useClubSocket({
   const [incoming, setIncoming] = useState(initialIncoming);
   const [outgoing, setOutgoing] = useState(initialOutgoing);
   const [liveGames, setLiveGames] = useState(initialLiveGames);
+  const [offers, setOffers] = useState(initialOffers);
 
   const socketRef = useRef<WebSocket | null>(null);
   const attemptRef = useRef(0);
@@ -103,6 +107,9 @@ export function useClubSocket({
           case "lobby":
             setLiveGames(frame.games);
             break;
+          case "offers":
+            setOffers(frame.offers);
+            break;
           case "gameStarted":
             startedRef.current?.(frame.gameId);
             break;
@@ -153,6 +160,20 @@ export function useClubSocket({
     [request],
   );
 
+  const offerGame = useCallback(
+    (timeControl: string, color: string) =>
+      request({ t: "offer", timeControl, color }),
+    [request],
+  );
+  const acceptOffer = useCallback(
+    (id: number) => request({ t: "offerAccept", id }),
+    [request],
+  );
+  const cancelOffer = useCallback(
+    (id: number) => request({ t: "offerCancel", id }),
+    [request],
+  );
+
   const acceptChallenge = useCallback(
     (id: number) => request({ t: "challengeAccept", id }),
     [request],
@@ -176,8 +197,12 @@ export function useClubSocket({
     incoming,
     outgoing,
     liveGames,
+    offers,
     send,
     challenge,
+    offerGame,
+    acceptOffer,
+    cancelOffer,
     acceptChallenge,
     declineChallenge,
     cancelChallenge,

@@ -199,6 +199,22 @@ body {
   font-feature-settings: normal;
 }
 
+/*
+ * Centring the line box is not centring the piece. Noto's chess glyphs sit
+ * high in the em box — their ink runs from the baseline to about 0.75em, so
+ * the ink centre lands ~0.145em above the centre of the box the grid centres,
+ * and every piece looks like it is floating off the top of its square.
+ *
+ * One nudge for all six glyphs rather than a measured value each: it also
+ * keeps them on a common baseline, the way pieces standing on a board share
+ * one. Goes on the glyph, never on the coloured element — the promotion
+ * buttons wear .piece-white too, and shifting those would move the buttons.
+ */
+.piece-glyph {
+  display: block;
+  transform: translateY(0.145em);
+}
+
 .piece-white {
   color: #fff;
   -webkit-text-stroke: 1.4px var(--color-ink);

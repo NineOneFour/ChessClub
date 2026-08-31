@@ -2,12 +2,14 @@ import "dotenv/config";
 import { inArray } from "drizzle-orm";
 import WebSocket from "ws";
 import { client, db } from "../lib/db";
-import { chatMessages, families, users } from "../lib/db/schema";
+import { challenges, chatMessages, families, gameMoves, gameOffers, games, users } from "../lib/db/schema";
 import { generateToken, hashToken } from "../lib/auth/tokens";
 import { insertSession, deleteSessionsForUser } from "../lib/auth/session-store";
 import * as usersService from "../lib/services/users";
+import * as gamesService from "../lib/services/games";
+import * as offersService from "../lib/services/offers";
 import { REALTIME_PORT } from "../lib/config";
-import type { ServerFrame } from "../realtime/protocol";
+import type { ClientFrame, ServerFrame } from "../realtime/protocol";
 
 /**
  * Live check of the realtime service. Needs it running:
@@ -16,14 +18,15 @@ import type { ServerFrame } from "../realtime/protocol";
  *   npm run smoke:realtime
  *
  * Creates two throwaway children, connects a socket as each, and checks that
- * presence and chat actually cross between them — the part the service-layer
- * smoke test can't reach, since it never opens a socket.
+ * presence, chat and open offers actually cross between them — the part the
+ * service-layer smoke test can't reach, since it never opens a socket.
  */
 
 const SUFFIX = "rtsmoke";
-const created: { userIds: number[]; familyIds: number[] } = {
+const created: { userIds: number[]; familyIds: number[]; gameIds: number[] } = {
   userIds: [],
   familyIds: [],
+  gameIds: [],
 };
 
 function check(label: string, condition: boolean) {
@@ -61,6 +64,11 @@ class Client {
 
   send(body: string) {
     this.socket.send(JSON.stringify({ t: "chat", channel: "club", body }));
+  }
+
+  /** Any other client frame, for the parts of the protocol that aren't chat. */
+  request(frame: ClientFrame) {
+    this.socket.send(JSON.stringify(frame));
   }
 
   close() {
@@ -224,6 +232,124 @@ async function main() {
   check("chat switched off mid-connection is enforced", true);
   await usersService.setFlags(kids[1].id, { chatEnabled: true }, null);
 
+  console.log("Open offers");
+
+  ada.request({ t: "offer", timeControl: "5+0", color: "white" });
+  const posted = await bruno.waitFor(
+    "offers",
+    (frame) => frame.offers.some((offer) => offer.fromId === kids[0].id),
+    "Ada's board appearing for Bruno",
+  );
+  const adaOffer = posted.offers.find((o) => o.fromId === kids[0].id)!;
+  check("an offer carries the time control", adaOffer.timeControl === "5 min");
+  check(
+    "and the offerer, by username and role",
+    adaOffer.fromUsername === `ada-${SUFFIX}` && adaOffer.fromRole === "child",
+  );
+
+  ada.request({ t: "offer", timeControl: "3+2", color: "random" });
+  await ada.waitFor(
+    "notice",
+    (frame) => frame.message.includes("already out"),
+    "a second board being refused",
+  );
+  check("one board out per member", true);
+
+  ada.request({ t: "offerCancel", id: adaOffer.id });
+  await bruno.waitFor(
+    "offers",
+    (frame) => !frame.offers.some((offer) => offer.id === adaOffer.id),
+    "the board coming back in",
+  );
+  check("cancelling is broadcast to the room", true);
+
+  // Put it out again and have Bruno sit down: both players are sent to the
+  // board, and the offer leaves everybody's list.
+  ada.request({ t: "offer", timeControl: "5+0", color: "white" });
+  // `waitFor` scans from the first frame, so this has to look for the *new*
+  // offer rather than any of Ada's.
+  const reposted = await bruno.waitFor(
+    "offers",
+    (frame) =>
+      frame.offers.some(
+        (offer) => offer.fromId === kids[0].id && offer.id !== adaOffer.id,
+      ),
+    "Ada's board again",
+  );
+  const takenOffer = reposted.offers.find(
+    (o) => o.fromId === kids[0].id && o.id !== adaOffer.id,
+  )!;
+
+  bruno.request({ t: "offerAccept", id: takenOffer.id });
+  const brunoStarted = await bruno.waitFor(
+    "gameStarted",
+    () => true,
+    "Bruno being sent to the board",
+  );
+  const adaStarted = await ada.waitFor(
+    "gameStarted",
+    () => true,
+    "Ada being sent to the board",
+  );
+  created.gameIds.push(brunoStarted.gameId);
+  check(
+    "both players are sent to the same game",
+    adaStarted.gameId === brunoStarted.gameId,
+  );
+  await bruno.waitFor(
+    "offers",
+    (frame) => !frame.offers.some((offer) => offer.id === takenOffer.id),
+    "the taken board leaving the list",
+  );
+  check("a taken board leaves the list", true);
+  await bruno.waitFor(
+    "lobby",
+    (frame) => frame.games.some((game) => game.id === brunoStarted.gameId),
+    "the new game appearing in the lobby",
+  );
+  check("and the game appears in the watch list", true);
+
+  // Finish it, so the rematch below has a finished game to work from.
+  await gamesService.resign(brunoStarted.gameId, kids[0].id);
+
+  console.log("Play again");
+
+  ada.request({ t: "rematch", gameId: brunoStarted.gameId });
+  const asked = await bruno.waitFor(
+    "challenges",
+    (frame) =>
+      frame.incoming.some((c) => c.fromUsername === `ada-${SUFFIX}`),
+    "Ada's rematch offer reaching Bruno",
+  );
+  const rematchOffer = asked.incoming.find(
+    (c) => c.fromUsername === `ada-${SUFFIX}`,
+  )!;
+  check(
+    "a rematch reaches the other player where they are sitting",
+    rematchOffer.timeControl === "5 min",
+  );
+  check(
+    "asking for the colour they didn't have",
+    rematchOffer.color === "black",
+  );
+
+  bruno.request({ t: "rematch", gameId: brunoStarted.gameId });
+  const again = await bruno.waitFor(
+    "gameStarted",
+    (frame) => frame.gameId !== brunoStarted.gameId,
+    "the rematch starting for Bruno",
+  );
+  const adaAgain = await ada.waitFor(
+    "gameStarted",
+    (frame) => frame.gameId !== brunoStarted.gameId,
+    "the rematch starting for Ada",
+  );
+  created.gameIds.push(again.gameId);
+  check("the second tap starts it for both", adaAgain.gameId === again.gameId);
+
+  // And finish that one too, so the departure checks aren't fighting a live game.
+  await gamesService.resign(again.gameId, kids[0].id);
+
   console.log("Departure");
 
   bruno.close();
@@ -234,8 +360,28 @@ async function main() {
   );
   check("a departure is broadcast", true);
 
+  // A board left out by somebody who has gone home would start a game against
+  // an empty chair, so leaving withdraws it.
+  ada.request({ t: "offer", timeControl: "5+0", color: "random" });
+  // Again, the *new* offer: the socket must have really put the board out
+  // before closing, or this would be testing nothing.
+  await ada.waitFor(
+    "offers",
+    (frame) =>
+      frame.offers.some(
+        (offer) => offer.fromId === kids[0].id && offer.id > takenOffer.id,
+      ),
+    "Ada's parting board",
+  );
+
   ada.close();
   await new Promise((resolve) => setTimeout(resolve, 400));
+  check(
+    "leaving the room withdraws your board",
+    (await offersService.listOpen()).every(
+      (offer) => offer.fromId !== kids[0].id,
+    ),
+  );
   const rosterAfter = await usersService.listClubMembers();
   check(
     "the presence table is cleared on disconnect",
@@ -253,6 +399,20 @@ async function cleanup() {
     await db
       .delete(chatMessages)
       .where(inArray(chatMessages.userId, created.userIds));
+    await db.delete(gameOffers).where(inArray(gameOffers.fromId, created.userIds));
+  }
+  if (created.gameIds.length) {
+    // Rematch challenges point at the game they produced.
+    await db.delete(challenges).where(inArray(challenges.gameId, created.gameIds));
+  }
+  if (created.userIds.length) {
+    await db.delete(challenges).where(inArray(challenges.fromId, created.userIds));
+  }
+  if (created.gameIds.length) {
+    await db.delete(gameMoves).where(inArray(gameMoves.gameId, created.gameIds));
+    await db.delete(games).where(inArray(games.id, created.gameIds));
+  }
+  if (created.userIds.length) {
     await db.delete(users).where(inArray(users.id, created.userIds));
   }
   if (created.familyIds.length) {

@@ -8,6 +8,7 @@ import type {
   ServerChatMessage,
   WireChallenge,
   WireGameCard,
+  WireOffer,
 } from "@/realtime/protocol";
 import { TIME_CONTROLS } from "@/lib/chess/time-controls";
 import { MAX_CHAT_LENGTH } from "@/lib/validation";
@@ -26,8 +27,8 @@ export type RosterMember = {
 
 /**
  * The clubhouse. Walking in, a member should see who's here, what's being
- * played, who has challenged them, and the conversation — with **play**,
- * **watch** and **chat** as the obvious things to do.
+ * played, who has challenged them, whose board is out, and the conversation —
+ * with **play**, **watch** and **chat** as the obvious things to do.
  *
  * Everything on this screen comes down the one socket, so the roster, the
  * challenge list and the games in progress cannot drift apart.
@@ -40,6 +41,7 @@ export function Clubhouse({
   initialIncoming,
   initialOutgoing,
   initialLiveGames,
+  initialOffers,
   myActiveGameId,
 }: {
   me: { id: number; canChat: boolean; chatBlockedReason: string | null };
@@ -49,6 +51,7 @@ export function Clubhouse({
   initialIncoming: WireChallenge[];
   initialOutgoing: WireChallenge[];
   initialLiveGames: WireGameCard[];
+  initialOffers: WireOffer[];
   myActiveGameId: number | null;
 }) {
   const router = useRouter();
@@ -62,8 +65,12 @@ export function Clubhouse({
     incoming,
     outgoing,
     liveGames,
+    offers,
     send,
     challenge,
+    offerGame,
+    acceptOffer,
+    cancelOffer,
     acceptChallenge,
     declineChallenge,
     cancelChallenge,
@@ -73,6 +80,7 @@ export function Clubhouse({
     initialIncoming,
     initialOutgoing,
     initialLiveGames,
+    initialOffers,
     onGameStarted: (gameId) => router.push(`/game/${gameId}`),
   });
 
@@ -82,6 +90,10 @@ export function Clubhouse({
   const away = others.filter((member) => !onlineIds.has(member.id));
 
   const [challenging, setChallenging] = useState<RosterMember | null>(null);
+  const [offering, setOffering] = useState(false);
+
+  const myOffer = offers.find((offer) => offer.fromId === me.id) ?? null;
+  const canPlay = myActiveGameId === null;
 
   return (
     <div className="space-y-8">
@@ -113,7 +125,9 @@ export function Clubhouse({
                 className="flex flex-wrap items-center gap-3 px-3 py-2"
               >
                 <Avatar avatar={item.fromAvatar} size="sm" />
-                <span className="text-sm font-semibold">{item.fromUsername}</span>
+                <span className="text-sm font-semibold">
+                  {item.fromUsername}
+                </span>
                 <span className="font-mono text-xs text-ink-soft">
                   {item.timeControl}
                   {item.color !== "random" && ` · wants ${item.color}`}
@@ -137,6 +151,75 @@ export function Clubhouse({
               </div>
             ))}
           </div>
+        </section>
+      )}
+
+      {canPlay && (
+        <section>
+          <SectionHeading
+            label="Boards out"
+            action={
+              myOffer ? (
+                <button
+                  type="button"
+                  className="eyebrow hover:text-stamp"
+                  onClick={() => cancelOffer(myOffer.id)}
+                >
+                  Take mine back
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => setOffering(true)}
+                >
+                  Start a game
+                </button>
+              )
+            }
+          />
+          {offers.length === 0 ? (
+            <p className="text-sm text-ink-soft">
+              Nobody is waiting for a game. Put a board out and the first person
+              here can sit down.
+            </p>
+          ) : (
+            <div className="sheet ruled">
+              {offers.map((offer) => (
+                <div
+                  key={offer.id}
+                  className="flex flex-wrap items-center gap-3 px-3 py-2"
+                >
+                  <Avatar
+                    avatar={offer.fromAvatar}
+                    role={offer.fromRole}
+                    size="sm"
+                  />
+                  <span className="text-sm font-semibold">
+                    {offer.fromId === me.id ? "You" : offer.fromUsername}
+                  </span>
+                  <GrownUpTag role={offer.fromRole} />
+                  <span className="font-mono text-xs text-ink-soft">
+                    {offer.timeControl}
+                    {offer.color !== "random" && ` · wants ${offer.color}`}
+                  </span>
+                  {offer.fromId === me.id ? (
+                    <span className="ml-auto text-xs text-ink-soft">
+                      Waiting for someone to sit down
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn ml-auto"
+                      onClick={() => acceptOffer(offer.id)}
+                    >
+                      Play
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </section>
       )}
 
@@ -207,9 +290,7 @@ export function Clubhouse({
                     member={member}
                     online
                     onChallenge={
-                      myActiveGameId === null
-                        ? () => setChallenging(member)
-                        : undefined
+                      canPlay ? () => setChallenging(member) : undefined
                     }
                   />
                 ))}
@@ -244,10 +325,7 @@ export function Clubhouse({
 
           {away.length > 0 && (
             <div>
-              <SectionHeading
-                label="Not here today"
-                count={`${away.length}`}
-              />
+              <SectionHeading label="Not here today" count={`${away.length}`} />
               <ul className="space-y-2">
                 {away.map((member) => (
                   <MemberRow key={member.id} member={member} online={false} />
@@ -259,12 +337,25 @@ export function Clubhouse({
       </div>
 
       {challenging && (
-        <ChallengeDialog
-          member={challenging}
+        <GameDialog
+          eyebrow="Challenge"
+          title={challenging.username}
           onClose={() => setChallenging(null)}
           onSend={(timeControl, color) => {
             challenge(challenging.username, timeControl, color);
             setChallenging(null);
+          }}
+        />
+      )}
+
+      {offering && (
+        <GameDialog
+          eyebrow="Start a game"
+          title="Anyone who's here"
+          onClose={() => setOffering(false)}
+          onSend={(timeControl, color) => {
+            offerGame(timeControl, color);
+            setOffering(false);
           }}
         />
       )}
@@ -324,16 +415,19 @@ function MemberRow({
 }
 
 /**
- * Picking a game. Time control is the choice that matters, so each option is a
- * button that sends the challenge — one tap, not a form to fill in. Colour sits
- * above it as a detail most kids will leave alone.
+ * Picking a game — for a challenge to one member, or a board put out for
+ * whoever is here. Time control is the choice that matters, so each option is a
+ * button that sends it — one tap, not a form to fill in. Colour sits above it
+ * as a detail most kids will leave alone.
  */
-function ChallengeDialog({
-  member,
+function GameDialog({
+  eyebrow,
+  title,
   onClose,
   onSend,
 }: {
-  member: RosterMember;
+  eyebrow: string;
+  title: string;
   onClose: () => void;
   onSend: (timeControl: string, color: string) => void;
 }) {
@@ -356,8 +450,8 @@ function ChallengeDialog({
         className="sheet w-full max-w-sm p-5"
         onClick={(event) => event.stopPropagation()}
       >
-        <p className="eyebrow">Challenge</p>
-        <h2 className="masthead mt-1 text-2xl">{member.username}</h2>
+        <p className="eyebrow">{eyebrow}</p>
+        <h2 className="masthead mt-1 text-2xl">{title}</h2>
 
         <fieldset className="mt-4">
           <legend className="eyebrow">I&apos;ll play</legend>

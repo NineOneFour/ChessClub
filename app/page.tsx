@@ -3,6 +3,7 @@ import { CLUB_CHANNEL } from "@/lib/db/schema";
 import * as challenges from "@/lib/services/challenges";
 import * as chat from "@/lib/services/chat";
 import * as games from "@/lib/services/games";
+import * as offers from "@/lib/services/offers";
 import * as users from "@/lib/services/users";
 import { Clubhouse } from "./components/Clubhouse";
 import { Shell } from "./components/Shell";
@@ -18,15 +19,23 @@ export const dynamic = "force-dynamic";
 export default async function ClubhousePage() {
   const me = await requireUser();
 
-  const [roster, messages, myActiveGameId, incoming, outgoing, liveGames] =
-    await Promise.all([
-      users.listClubMembers(),
-      chat.listVisible(CLUB_CHANNEL),
-      games.activeGameFor(me.id),
-      challenges.listIncoming(me.id),
-      challenges.listOutgoing(me.id),
-      games.listActive(),
-    ]);
+  const [
+    roster,
+    messages,
+    myActiveGameId,
+    incoming,
+    outgoing,
+    liveGames,
+    openOffers,
+  ] = await Promise.all([
+    users.listClubMembers(),
+    chat.listVisible(CLUB_CHANNEL),
+    games.activeGameFor(me.id),
+    challenges.listIncoming(me.id),
+    challenges.listOutgoing(me.id),
+    games.listActive(),
+    offers.listOpen(),
+  ]);
 
   const speak = chat.canSpeak(me);
 
@@ -63,6 +72,25 @@ export default async function ClubhousePage() {
           timeControl: game.timeControl,
           ply: game.ply,
         }))}
+        initialOffers={openOffers.map(
+          ({
+            id,
+            fromId,
+            fromUsername,
+            fromAvatar,
+            fromRole,
+            color,
+            timeControl,
+          }) => ({
+            id,
+            fromId,
+            fromUsername,
+            fromAvatar,
+            fromRole,
+            color,
+            timeControl,
+          }),
+        )}
       />
     </Shell>
   );

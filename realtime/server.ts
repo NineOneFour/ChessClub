@@ -6,6 +6,7 @@ import type { SessionUser } from "../lib/auth/session-store";
 import * as chat from "../lib/services/chat";
 import * as challenges from "../lib/services/challenges";
 import * as gamesService from "../lib/services/games";
+import * as offers from "../lib/services/offers";
 import * as presence from "../lib/services/presence";
 import * as usersService from "../lib/services/users";
 import * as clock from "../lib/chess/clock";
@@ -20,6 +21,7 @@ import {
   type WireChallenge,
   type WireGame,
   type WireGameCard,
+  type WireOffer,
 } from "./protocol";
 import { ValidationError } from "../lib/validation";
 
@@ -169,6 +171,9 @@ async function unregister(connection: Connection) {
     connections.delete(id);
     await presence.setConnections(id, 0);
     await presence.markLastSeen(id);
+    // A board left out by somebody who has gone home would start a game
+    // against an empty chair.
+    if (await offers.expireFor(id)) await publishOffers();
   } else {
     await presence.setConnections(id, set.size);
   }
@@ -200,6 +205,18 @@ function toWireChallenge(challenge: challenges.Challenge): WireChallenge {
     toUsername: challenge.toUsername,
     color: challenge.color,
     timeControl: challenge.timeControl,
+  };
+}
+
+function toWireOffer(offer: offers.Offer): WireOffer {
+  return {
+    id: offer.id,
+    fromId: offer.fromId,
+    fromUsername: offer.fromUsername,
+    fromAvatar: offer.fromAvatar,
+    fromRole: offer.fromRole,
+    color: offer.color,
+    timeControl: offer.timeControl,
   };
 }
 
@@ -314,6 +331,18 @@ async function armExistingGames() {
 async function publishLobby() {
   const active = await gamesService.listActive();
   broadcast({ t: "lobby", games: active.map(toWireCard) });
+}
+
+/**
+ * Open offers, to everybody. Unlike a challenge an offer isn't addressed to
+ * anyone, so the whole room needs the same list — and the accept button has to
+ * disappear for the seven people who didn't get there first.
+ */
+async function publishOffers(only?: number) {
+  const open = await offers.listOpen();
+  const frame: ServerFrame = { t: "offers", offers: open.map(toWireOffer) };
+  if (only === undefined) broadcast(frame);
+  else sendToUser(only, frame);
 }
 
 async function publishChallenges(userId: number) {
@@ -505,7 +534,29 @@ async function handleChallenge(connection: Connection, frame: ClientFrame) {
 
         const state = await gamesService.get(gameId);
         if (state) scheduleFlagCheck(state);
+        // Both players' boards came in with the challenge.
+        await publishOffers();
         await publishLobby();
+        break;
+      }
+
+      case "rematch": {
+        const { opponentId, gameId } = await challenges.rematch({
+          gameId: frame.gameId,
+          fromId: user.id,
+        });
+        await publishChallenges(user.id);
+        await publishChallenges(opponentId);
+
+        // Null while it is still an offer: the other player's tap starts it.
+        if (gameId !== null) {
+          sendToUser(user.id, { t: "gameStarted", gameId });
+          sendToUser(opponentId, { t: "gameStarted", gameId });
+          const state = await gamesService.get(gameId);
+          if (state) scheduleFlagCheck(state);
+          await publishOffers();
+          await publishLobby();
+        }
         break;
       }
 
@@ -531,6 +582,59 @@ async function handleChallenge(connection: Connection, frame: ClientFrame) {
       return;
     }
     console.error("[realtime] challenge action failed", err);
+    notice(connection, "That didn't work. Try again.");
+  }
+}
+
+/**
+ * Open offers: putting a board out, taking it away, and taking somebody up on
+ * one. Accepting is the only action here that can start a game, and the race
+ * between two members tapping at once is settled in the service.
+ */
+async function handleOffer(connection: Connection, frame: ClientFrame) {
+  const user = await currentUser(connection);
+  if (!user) return;
+
+  try {
+    switch (frame.t) {
+      case "offer":
+        await offers.create({
+          fromId: user.id,
+          timeControlKey: frame.timeControl,
+          color: frame.color,
+        });
+        await publishOffers();
+        break;
+
+      case "offerCancel":
+        await offers.cancel(frame.id, user.id);
+        await publishOffers();
+        break;
+
+      case "offerAccept": {
+        const offererId = await offers.offererId(frame.id);
+        const gameId = await offers.accept(frame.id, user.id);
+
+        // Both players are sent to the board.
+        sendToUser(user.id, { t: "gameStarted", gameId });
+        if (offererId) sendToUser(offererId, { t: "gameStarted", gameId });
+
+        await publishOffers();
+        await publishChallenges(user.id);
+        if (offererId) await publishChallenges(offererId);
+
+        const state = await gamesService.get(gameId);
+        if (state) scheduleFlagCheck(state);
+        await publishLobby();
+        break;
+      }
+    }
+  } catch (err) {
+    if (err instanceof ValidationError) {
+      notice(connection, err.message);
+      return;
+    }
+    console.error("[realtime] offer action failed", err);
     notice(connection, "That didn't work. Try again.");
   }
 }
@@ -599,6 +703,7 @@ wss.on(
     detach("registering a connection", async () => {
       await register(connection);
       await publishChallenges(user.id);
+      await publishOffers(user.id);
       await publishLobby();
     });
 
@@ -644,6 +749,11 @@ wss.on(
           detachGameAction(connection, frame.gameId, (userId) =>
             gamesService.clearDrawOffer(frame.gameId, userId),
           );
+          break;
+        case "offer":
+        case "offerAccept":
+        case "offerCancel":
+          detach("offer", () => handleOffer(connection, frame));
           break;
         case "flag":
           // Anyone may ask; the service decides whether the clock really fell.
@@ -694,6 +804,8 @@ setInterval(() => {
 async function main() {
   // Counts left behind by a previous process are lies.
   await presence.resetAll();
+  // By the same rule as above: nobody is connected, so no offer is genuine.
+  await offers.expireAll();
   await armExistingGames();
   server.listen(REALTIME_PORT, () => {
     console.log(`[realtime] listening on :${REALTIME_PORT}`);

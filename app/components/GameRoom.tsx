@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { ServerChatMessage, WireGame } from "@/realtime/protocol";
 import { formatClock } from "@/lib/chess/clock";
@@ -31,19 +32,26 @@ export function GameRoom({
   canChat: boolean;
   chatBlockedReason: string | null;
 }) {
+  const router = useRouter();
+
   const {
     connection,
     game,
     receivedAt,
     messages,
     notice,
+    challenges,
     move,
     resign,
     offerDraw,
     cancelDraw,
     claimFlag,
+    rematch,
+    cancelChallenge,
     say,
-  } = useGameSocket(gameId, initialGame, initialMessages);
+  } = useGameSocket(gameId, initialGame, initialMessages, (newGameId) =>
+    router.push(`/game/${newGameId}`),
+  );
 
   const clocks = useLiveClock(game, receivedAt);
 
@@ -53,6 +61,22 @@ export function GameRoom({
       : viewerId === game.black.id
         ? "black"
         : null;
+
+  const opponent =
+    playingAs === "white"
+      ? game.black
+      : playingAs === "black"
+        ? game.white
+        : null;
+
+  // A rematch travels as an ordinary challenge between the two players, so it
+  // is simply the open challenge involving the person you just played.
+  const myRematch = opponent
+    ? (challenges.outgoing.find((c) => c.toId === opponent.id) ?? null)
+    : null;
+  const theirRematch = opponent
+    ? (challenges.incoming.find((c) => c.fromId === opponent.id) ?? null)
+    : null;
 
   // Spectators watch from white's side; players from their own.
   const [flipped, setFlipped] = useState(false);
@@ -146,15 +170,41 @@ export function GameRoom({
                   Accept draw
                 </button>
               ) : drawOfferedByMe ? (
-                <button type="button" className="btn btn-quiet" onClick={cancelDraw}>
+                <button
+                  type="button"
+                  className="btn btn-quiet"
+                  onClick={cancelDraw}
+                >
                   Take back draw offer
                 </button>
               ) : (
-                <button type="button" className="btn btn-quiet" onClick={offerDraw}>
+                <button
+                  type="button"
+                  className="btn btn-quiet"
+                  onClick={offerDraw}
+                >
                   Offer a draw
                 </button>
               )}
               <ResignButton onResign={resign} />
+            </>
+          )}
+
+          {game.status === "finished" && playingAs && (
+            <>
+              {myRematch ? (
+                <button
+                  type="button"
+                  className="btn btn-quiet"
+                  onClick={() => cancelChallenge(myRematch.id)}
+                >
+                  Take back {theirRematch ? "my offer" : "the offer"}
+                </button>
+              ) : (
+                <button type="button" className="btn" onClick={rematch}>
+                  Play again
+                </button>
+              )}
             </>
           )}
 
@@ -172,9 +222,22 @@ export function GameRoom({
 
         {drawOfferedToMe && (
           <p className="mt-3 border-l-2 border-brass pl-3 text-sm">
-            {(game.drawOfferBy === game.white.id ? game.white : game.black)
-              .username}{" "}
+            {
+              (game.drawOfferBy === game.white.id ? game.white : game.black)
+                .username
+            }{" "}
             is offering a draw.
+          </p>
+        )}
+        {theirRematch && !myRematch && (
+          <p className="mt-3 border-l-2 border-brass pl-3 text-sm">
+            {opponent?.username} wants another game —{" "}
+            <strong>Play again</strong> starts it.
+          </p>
+        )}
+        {myRematch && (
+          <p className="mt-3 border-l-2 border-rule pl-3 text-sm text-ink-soft">
+            Waiting for {opponent?.username} to play again.
           </p>
         )}
         {notice && (
@@ -306,7 +369,9 @@ function Outcome({
 }) {
   if (game.status !== "finished") return null;
 
-  const reason = game.resultReason ? REASON_WORDS[game.resultReason] ?? "" : "";
+  const reason = game.resultReason
+    ? (REASON_WORDS[game.resultReason] ?? "")
+    : "";
   const drawn = game.winnerId === null;
   const winner =
     game.winnerId === game.white.id

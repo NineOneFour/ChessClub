@@ -116,8 +116,9 @@ export const gameMoves = pgTable(
 
 /**
  * A challenge from one member to another. There is no matchmaking and no
- * open-seek pool: you challenge someone you can see in the clubhouse, which is
- * how it works at a real club.
+ * ratings-based pairing: you challenge someone you can see in the clubhouse,
+ * which is how it works at a real club. `gameOffers` below is the undirected
+ * version of the same thing.
  */
 export const challenges = pgTable(
   "challenges",
@@ -148,6 +149,42 @@ export const challenges = pgTable(
      */
     uniqueIndex("challenges_open_pair_key")
       .on(t.fromId, t.toId)
+      .where(sql`status = 'open'`),
+  ],
+);
+
+/**
+ * An open offer: "I'll play anyone". The counterpart to a challenge — nobody
+ * is named, and the first member to accept gets the game.
+ *
+ * Offers belong to the clubhouse rather than to the database's long memory:
+ * the realtime service expires a member's open offer when their last socket
+ * closes, and expires every offer on startup, so the list only ever shows
+ * people who are actually in the room to play.
+ */
+export const gameOffers = pgTable(
+  "game_offers",
+  {
+    id: serial("id").primaryKey(),
+    fromId: integer("from_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    initialMs: integer("initial_ms").notNull(),
+    incrementMs: integer("increment_ms").notNull(),
+    /** Colour the offerer asked for: "white", "black" or "random". */
+    color: text("color").notNull().default("random"),
+    status: text("status").notNull().default("open"),
+    gameId: integer("game_id").references(() => games.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("game_offers_status_idx").on(t.status, t.id),
+    /** One open offer per member: the button can't build a queue. */
+    uniqueIndex("game_offers_open_from_key")
+      .on(t.fromId)
       .where(sql`status = 'open'`),
   ],
 );

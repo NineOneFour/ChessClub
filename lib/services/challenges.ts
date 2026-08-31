@@ -1,6 +1,6 @@
 import { and, desc, eq, ne, or, sql } from "drizzle-orm";
 import { db } from "../db";
-import { challenges, users } from "../db/schema";
+import { challenges, gameOffers, users } from "../db/schema";
 import { isTimeControlKey, timeControl } from "../chess/time-controls";
 import { describeTimeControl } from "../chess/time-controls";
 import { fail } from "../validation";
@@ -9,9 +9,10 @@ import * as games from "./games";
 /**
  * Challenges.
  *
- * No matchmaking, no seek pool, no ratings-based pairing: you challenge
- * somebody you can see in the clubhouse, and they say yes or no. That is how
- * it works at a real club, and with a dozen members it is all that's needed.
+ * No matchmaking and no ratings-based pairing: you challenge somebody you can
+ * see in the clubhouse, and they say yes or no. That is how it works at a real
+ * club, and with a dozen members it is all that's needed. `offers.ts` is the
+ * undirected version — a board put out for whoever is here.
  */
 
 export const COLOR_CHOICES = ["random", "white", "black"] as const;
@@ -214,6 +215,22 @@ export async function accept(
     .set({ gameId })
     .where(eq(challenges.id, challenge.id));
 
+  // Both players are now busy, so any board either of them had out comes in.
+  // Written against the table directly rather than through `offers`, which
+  // imports this module.
+  await db
+    .update(gameOffers)
+    .set({ status: "expired", resolvedAt: new Date() })
+    .where(
+      and(
+        eq(gameOffers.status, "open"),
+        or(
+          eq(gameOffers.fromId, challenge.fromId),
+          eq(gameOffers.fromId, challenge.toId),
+        ),
+      ),
+    );
+
   // Any other open challenge involving either player is now moot.
   await db
     .update(challenges)
@@ -232,6 +249,81 @@ export async function accept(
     );
 
   return gameId;
+}
+
+/**
+ * Play again: a rematch of a finished game, same time control, colours
+ * swapped, as over the board.
+ *
+ * Symmetrical on purpose. It is a challenge like any other, so the first tap
+ * offers and the second accepts — whichever player taps second is the one who
+ * starts the game. That means neither player has to go back to the clubhouse
+ * to find the offer, and there is no separate rematch state to keep anywhere:
+ * `gameId` is null while it is still an offer.
+ */
+export async function rematch(input: {
+  gameId: number;
+  fromId: number;
+}): Promise<{ opponentId: number; gameId: number | null }> {
+  const state = await games.get(input.gameId);
+  if (!state) fail("That game has gone.");
+  if (state.status !== "finished") fail("That game isn't over yet.");
+
+  const iWasWhite = state.white.id === input.fromId;
+  const iWasBlack = state.black.id === input.fromId;
+  if (!iWasWhite && !iWasBlack) fail("You weren't playing in that game.");
+
+  const opponentId = iWasWhite ? state.black.id : state.white.id;
+
+  // They asked first: take them up on it rather than stacking a second
+  // challenge nobody would answer.
+  const theirs = await openFrom(opponentId, input.fromId);
+  if (theirs) {
+    return { opponentId, gameId: await accept(theirs.id, input.fromId) };
+  }
+
+  if (await games.activeGameFor(input.fromId)) {
+    fail("Finish the game you're in first.");
+  }
+  if (await games.activeGameFor(opponentId)) {
+    const them = iWasWhite ? state.black : state.white;
+    fail(`${them.username} is already playing.`);
+  }
+
+  try {
+    await db.insert(challenges).values({
+      fromId: input.fromId,
+      toId: opponentId,
+      initialMs: state.initialMs,
+      incrementMs: state.incrementMs,
+      // The colour *I* am asking for, so swapping means asking for theirs.
+      color: iWasWhite ? "black" : "white",
+    });
+  } catch (err) {
+    if (mentions(err, "challenges_open_pair_key")) {
+      fail("You've already asked for another game.");
+    }
+    throw err;
+  }
+
+  return { opponentId, gameId: null };
+}
+
+/** An open challenge in one direction, if there is one. */
+export async function openFrom(
+  fromId: number,
+  toId: number,
+): Promise<Challenge | null> {
+  const rows = await joined()
+    .where(
+      and(
+        eq(challenges.fromId, fromId),
+        eq(challenges.toId, toId),
+        eq(challenges.status, "open"),
+      ),
+    )
+    .limit(1);
+  return rows[0] ? toChallenge(rows[0]) : null;
 }
 
 /** Say no. Only the person challenged may decline. */

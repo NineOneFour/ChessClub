@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   ServerChatMessage,
   ServerFrame,
+  WireChallenge,
   WireGame,
 } from "@/realtime/protocol";
 
@@ -30,6 +31,8 @@ export function useGameSocket(
   gameId: number,
   initialGame: WireGame,
   initialMessages: ServerChatMessage[],
+  /** Called when a rematch begins, so the page can go to the new board. */
+  onGameStarted?: (newGameId: number) => void,
 ) {
   const [connection, setConnection] = useState<ConnectionState>("connecting");
   /**
@@ -43,10 +46,26 @@ export function useGameSocket(
   }));
   const [messages, setMessages] = useState(initialMessages);
   const [notice, setNotice] = useState<string | null>(null);
+  /**
+   * Your challenges, which after a finished game is how a rematch travels:
+   * one is offered as an ordinary challenge, so the same frames carry it and
+   * it is also waiting in the clubhouse if you wander off.
+   */
+  const [challenges, setChallenges] = useState<{
+    incoming: WireChallenge[];
+    outgoing: WireChallenge[];
+  }>({ incoming: [], outgoing: [] });
 
   const socketRef = useRef<WebSocket | null>(null);
   const attemptRef = useRef(0);
   const closedByUsRef = useRef(false);
+
+  // In a ref so a changing callback doesn't tear the socket down. Assigned in
+  // an effect: React 19 forbids touching a ref while rendering.
+  const startedRef = useRef(onGameStarted);
+  useEffect(() => {
+    startedRef.current = onGameStarted;
+  }, [onGameStarted]);
 
   useEffect(() => {
     closedByUsRef.current = false;
@@ -84,6 +103,15 @@ export function useGameSocket(
                 ? current
                 : [...current, frame.message],
             );
+            break;
+          case "challenges":
+            setChallenges({
+              incoming: frame.incoming,
+              outgoing: frame.outgoing,
+            });
+            break;
+          case "gameStarted":
+            if (frame.gameId !== gameId) startedRef.current?.(frame.gameId);
             break;
           case "notice":
             setNotice(frame.message);
@@ -133,6 +161,15 @@ export function useGameSocket(
   const offerDraw = useCallback(() => request({ t: "draw" }), [request]);
   const cancelDraw = useCallback(() => request({ t: "drawCancel" }), [request]);
   const claimFlag = useCallback(() => request({ t: "flag" }), [request]);
+  /** Offer a rematch, or accept the one already offered. */
+  const rematch = useCallback(() => request({ t: "rematch" }), [request]);
+
+  const cancelChallenge = useCallback((id: number) => {
+    const socket = socketRef.current;
+    if (!socket || socket.readyState !== WebSocket.OPEN) return false;
+    socket.send(JSON.stringify({ t: "challengeCancel", id }));
+    return true;
+  }, []);
 
   const say = useCallback(
     (body: string) => {
@@ -153,11 +190,14 @@ export function useGameSocket(
     messages,
     notice,
     setNotice,
+    challenges,
     move,
     resign,
     offerDraw,
     cancelDraw,
     claimFlag,
+    rematch,
+    cancelChallenge,
     say,
   };
 }

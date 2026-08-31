@@ -1,17 +1,18 @@
 import "dotenv/config";
 import { eq, inArray } from "drizzle-orm";
 import { client, db } from "../lib/db";
-import { challenges, chatMessages, families, gameMoves, games, users } from "../lib/db/schema";
+import { challenges, chatMessages, families, gameMoves, gameOffers, games, users } from "../lib/db/schema";
 import * as clock from "../lib/chess/clock";
 import * as rules from "../lib/chess/rules";
 import * as challengesService from "../lib/services/challenges";
 import * as gamesService from "../lib/services/games";
+import * as offersService from "../lib/services/offers";
 import * as usersService from "../lib/services/users";
 import { ValidationError } from "../lib/validation";
 
 /**
- * End-to-end check of the chess layer: rules, clocks, challenges and the
- * transactional game service, against the real database.
+ * End-to-end check of the chess layer: rules, clocks, challenges, open offers
+ * and the transactional game service, against the real database.
  *
  * The clock tests manipulate `clock_started_at` directly rather than sleeping,
  * so the whole suite runs in a couple of seconds.
@@ -453,6 +454,191 @@ async function main() {
   );
   check("and the termination", pgn.includes('[Termination "checkmate"]'));
 
+  console.log("Open offers");
+
+  // Five fresh players: ellie, max and ada are all in games by now, and an
+  // offer is refused to anybody who is playing.
+  const [noa, ivo, tam, ren, kit, fay, gus] = await Promise.all(
+    ["Noa", "Ivo", "Tam", "Ren", "Kit", "Fay", "Gus"].map((name) =>
+      usersService.create({
+        username: `${name.toLowerCase()}-${SUFFIX}`,
+        realName: name,
+        password: "smoke-password",
+        role: "child",
+        familyId,
+        actorId: null,
+      }),
+    ),
+  );
+  created.userIds.push(noa, ivo, tam, ren, kit, fay, gus);
+
+  await expectRejection("an offer with an unknown time control is refused", () =>
+    offersService.create({ fromId: noa, timeControlKey: "1+0", color: "random" }),
+  );
+
+  const offerId = await offersService.create({
+    fromId: noa,
+    timeControlKey: "5+0",
+    color: "white",
+  });
+  check("an offer is created", Number.isInteger(offerId));
+  check(
+    "and is on the open list, with who put it out",
+    (await offersService.listOpen()).some(
+      (o) => o.id === offerId && o.fromUsername === `noa-${SUFFIX}`,
+    ),
+  );
+  await expectRejection("a second offer from the same member is refused", () =>
+    offersService.create({ fromId: noa, timeControlKey: "3+2", color: "random" }),
+  );
+  await expectRejection("you can't accept your own offer", () =>
+    offersService.accept(offerId, noa),
+  );
+
+  const spare = await offersService.create({
+    fromId: ivo,
+    timeControlKey: "10+0",
+    color: "random",
+  });
+  await expectRejection("only the member who put it out may take it back", () =>
+    offersService.cancel(spare, tam),
+  );
+  await offersService.cancel(spare, ivo);
+  check(
+    "cancelling takes it off the list",
+    !(await offersService.listOpen()).some((o) => o.id === spare),
+  );
+
+  const offerGameId = await offersService.accept(offerId, ivo);
+  created.gameIds.push(offerGameId);
+  check("accepting starts a game", Number.isInteger(offerGameId));
+
+  const offerState = (await gamesService.get(offerGameId))!;
+  check("the offerer got the colour they asked for", offerState.white.id === noa);
+  check("and the accepter is the other side", offerState.black.id === ivo);
+  check("the time control carries over", offerState.timeControl === "5 min");
+  check(
+    "the offer is off the list once taken",
+    !(await offersService.listOpen()).some((o) => o.id === offerId),
+  );
+  await expectRejection("and can't be accepted twice", () =>
+    offersService.accept(offerId, tam),
+  );
+  await expectRejection("you can't put a board out while playing", () =>
+    offersService.create({ fromId: noa, timeControlKey: "5+0", color: "random" }),
+  );
+
+  // A board comes in when its owner starts a game some other way.
+  const fayOffer = await offersService.create({
+    fromId: fay,
+    timeControlKey: "5+0",
+    color: "random",
+  });
+  const sidewaysChallenge = await challengesService.create({
+    fromId: gus,
+    toUsername: `fay-${SUFFIX}`,
+    timeControlKey: "5+0",
+    color: "random",
+  });
+  created.gameIds.push(await challengesService.accept(sidewaysChallenge, fay));
+  check(
+    "accepting a challenge takes your board in",
+    !(await offersService.listOpen()).some((o) => o.id === fayOffer),
+  );
+
+  const tamOffer = await offersService.create({
+    fromId: tam,
+    timeControlKey: "15+10",
+    color: "black",
+  });
+  check(
+    "leaving the room withdraws your offer",
+    (await offersService.expireFor(tam)) &&
+      !(await offersService.listOpen()).some((o) => o.id === tamOffer),
+  );
+  check(
+    "and withdrawing again reports nothing to do",
+    (await offersService.expireFor(tam)) === false,
+  );
+
+  await offersService.create({ fromId: tam, timeControlKey: "5+0", color: "random" });
+  await offersService.expireAll();
+  check(
+    "a restart clears every board",
+    (await offersService.listOpen()).length === 0,
+  );
+
+  console.log("Play again");
+
+  const [zed, wren] = await Promise.all(
+    ["Zed", "Wren"].map((name) =>
+      usersService.create({
+        username: `${name.toLowerCase()}-${SUFFIX}`,
+        realName: name,
+        password: "smoke-password",
+        role: "child",
+        familyId,
+        actorId: null,
+      }),
+    ),
+  );
+  created.userIds.push(zed, wren);
+
+  const firstGame = await gamesService.create({
+    whiteId: zed,
+    blackId: wren,
+    initialMs: 3 * 60_000,
+    incrementMs: 2_000,
+  });
+  created.gameIds.push(firstGame);
+
+  await expectRejection("a rematch of a game still being played is refused", () =>
+    challengesService.rematch({ gameId: firstGame, fromId: zed }),
+  );
+
+  await gamesService.resign(firstGame, zed);
+
+  await expectRejection("and a rematch of somebody else's game is refused", () =>
+    challengesService.rematch({ gameId: firstGame, fromId: tam }),
+  );
+
+  const offeredRematch = await challengesService.rematch({
+    gameId: firstGame,
+    fromId: zed,
+  });
+  check("the first tap only offers", offeredRematch.gameId === null);
+  check("addressed to the opponent", offeredRematch.opponentId === wren);
+
+  const pending = (await challengesService.openFrom(zed, wren))!;
+  check("it is an ordinary challenge", pending !== null);
+  check(
+    "asking for the colour they didn't have",
+    pending.color === "black" && pending.initialMs === 3 * 60_000,
+  );
+  check(
+    "so it shows up in the clubhouse too",
+    (await challengesService.listIncoming(wren)).some((c) => c.id === pending.id),
+  );
+
+  await expectRejection("asking twice is refused", () =>
+    challengesService.rematch({ gameId: firstGame, fromId: zed }),
+  );
+
+  const secondTap = await challengesService.rematch({
+    gameId: firstGame,
+    fromId: wren,
+  });
+  check("the second tap starts the game", secondTap.gameId !== null);
+  created.gameIds.push(secondTap.gameId!);
+
+  const rematchState = (await gamesService.get(secondTap.gameId!))!;
+  check("with the colours swapped", rematchState.white.id === wren);
+  check("and the same time control", rematchState.timeControl === "3 + 2");
+  check(
+    "and no challenge left open",
+    (await challengesService.openFrom(zed, wren)) === null,
+  );
+
   console.log("Concurrency");
 
   const raceId = await gamesService.create({
@@ -471,6 +657,22 @@ async function main() {
   const landed = [a, b].filter((r) => r.ok).length;
   check("racing moves don't both land", landed === 1);
   check("and the game has exactly one move", (await gamesService.get(raceId))!.ply === 1);
+
+  // Two members tapping Play on the same board at the same moment.
+  const contested = await offersService.create({
+    fromId: ren,
+    timeControlKey: "5+0",
+    color: "random",
+  });
+  const attempts = await Promise.allSettled([
+    offersService.accept(contested, tam),
+    offersService.accept(contested, kit),
+  ]);
+  const won = attempts.filter((a) => a.status === "fulfilled");
+  check("only one member can take the same board", won.length === 1);
+  for (const win of won) {
+    if (win.status === "fulfilled") created.gameIds.push(win.value);
+  }
 }
 
 async function cleanup() {
@@ -478,6 +680,7 @@ async function cleanup() {
     await db.delete(challenges).where(inArray(challenges.gameId, created.gameIds));
   }
   if (created.userIds.length) {
+    await db.delete(gameOffers).where(inArray(gameOffers.fromId, created.userIds));
     await db.delete(challenges).where(inArray(challenges.fromId, created.userIds));
     await db.delete(chatMessages).where(inArray(chatMessages.userId, created.userIds));
   }

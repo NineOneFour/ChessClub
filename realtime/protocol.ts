@@ -31,6 +31,12 @@ export type ClientFrame =
   /** Ask the server to check whether a clock has run out. */
   | { t: "flag"; gameId: number }
   | { t: "challenge"; username: string; timeControl: string; color: string }
+  /** Put a board out for whoever is in the room. */
+  | { t: "offer"; timeControl: string; color: string }
+  | { t: "offerAccept"; id: number }
+  | { t: "offerCancel"; id: number }
+  /** Play again after a finished game: offers, or accepts theirs. */
+  | { t: "rematch"; gameId: number }
   | { t: "challengeAccept"; id: number }
   | { t: "challengeDecline"; id: number }
   | { t: "challengeCancel"; id: number };
@@ -122,6 +128,16 @@ export type WireChallenge = {
   timeControl: string;
 };
 
+export type WireOffer = {
+  id: number;
+  fromId: number;
+  fromUsername: string;
+  fromAvatar: string;
+  fromRole: string;
+  color: string;
+  timeControl: string;
+};
+
 export type WireGameCard = {
   id: number;
   whiteUsername: string;
@@ -150,6 +166,8 @@ export type ServerFrame =
   /** A game involving you has just begun; the clubhouse navigates to it. */
   | { t: "gameStarted"; gameId: number }
   | { t: "challenges"; incoming: WireChallenge[]; outgoing: WireChallenge[] }
+  /** Every open offer. Public to the club, so this one is broadcast. */
+  | { t: "offers"; offers: WireOffer[] }
   /** Games in progress, for the clubhouse's watch list. */
   | { t: "lobby"; games: WireGameCard[] };
 
@@ -231,6 +249,19 @@ export function decodeClientFrame(raw: string): ClientFrame | null {
             color: f.color,
           }
         : null;
+
+    case "offer":
+      return typeof f.timeControl === "string" && typeof f.color === "string"
+        ? { t: "offer", timeControl: f.timeControl, color: f.color }
+        : null;
+
+    case "offerAccept":
+      return isId(f.id) ? { t: "offerAccept", id: f.id } : null;
+    case "offerCancel":
+      return isId(f.id) ? { t: "offerCancel", id: f.id } : null;
+
+    case "rematch":
+      return isId(f.gameId) ? { t: "rematch", gameId: f.gameId } : null;
 
     case "challengeAccept":
       return isId(f.id) ? { t: "challengeAccept", id: f.id } : null;
