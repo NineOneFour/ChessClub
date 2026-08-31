@@ -7,6 +7,7 @@ import {
   type ResultReason,
 } from "../db/schema";
 import * as clock from "../chess/clock";
+import * as analysis from "./analysis";
 import * as rules from "../chess/rules";
 import { describeTimeControl } from "../chess/time-controls";
 import { fail } from "../validation";
@@ -327,6 +328,10 @@ export async function playMove(
       })
       .where(eq(games.id, gameId));
 
+    // A finished game is a queued game, in the same transaction. Nothing waits
+    // for Stockfish — see lib/services/analysis.ts.
+    if (ending) await analysis.enqueueIn(tx, gameId);
+
     const state = await reload(tx, gameId, now);
     return { ok: true as const, state };
   });
@@ -542,6 +547,8 @@ async function finishInTx(
       finishedAt: new Date(now),
     })
     .where(eq(games.id, game.id));
+
+  await analysis.enqueueIn(tx, game.id);
 
   return reload(tx, game.id, now);
 }

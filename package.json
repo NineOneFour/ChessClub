@@ -5,10 +5,13 @@
   "scripts": {
     "dev": "next dev",
     "dev:realtime": "tsx watch realtime/server.ts",
-    "dev:all": "concurrently -n web,realtime -c cyan,magenta \"npm:dev\" \"npm:dev:realtime\"",
+    "dev:all": "concurrently -n web,realtime,analysis -c cyan,magenta,yellow \"npm:dev\" \"npm:dev:realtime\" \"npm:dev:analysis\"",
     "build": "next build",
     "start": "next start",
     "realtime": "tsx realtime/server.ts",
+    "analysis": "tsx analysis/worker.ts",
+    "dev:analysis": "tsx watch analysis/worker.ts",
+    "analysis:queue": "tsx scripts/queue-analysis.ts",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
@@ -19,7 +22,8 @@
     "smoke:club": "tsx scripts/smoke-club.ts",
     "smoke:realtime": "tsx scripts/smoke-realtime.ts",
     "smoke:chess": "tsx scripts/smoke-chess.ts",
-    "smoke:play": "tsx scripts/smoke-play.ts"
+    "smoke:play": "tsx scripts/smoke-play.ts",
+    "smoke:analysis": "tsx scripts/smoke-analysis.ts"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.1.0",

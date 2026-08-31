@@ -462,19 +462,13 @@ Containerisation is deferred until deployment. Postgres runs locally for now.
 
 Not oversights — scope:
 
-- No board, no game pages, no spectating and no game chat yet — the phase 2
-  engine exists and is tested, but nothing in the UI reaches it. The member
-  card and the clubhouse still say there is nothing to play, which remains
-  true.
-- No rematch. The schema has no `rematch_of`; add it with the button.
 - No abandoned-game resolution. `games.listStale()` finds them; nothing acts on
   them, because a kid called to dinner should be able to come back.
-- No Play/Watch actions in the clubhouse, for the same reason.
 - No direct messages (the brief excludes them from the MVP).
-- No playing-hours schedule. The brief lists it under parental controls;
-  suspending an account covers the urgent case, and a schedule wants a
-  timezone conversation.
 - No chat pagination — the clubhouse loads the last 100 messages.
+- No rating yet. The analysis is stored; nothing reads it into a number. That
+  is the rest of phase 3 — see §17.
+- No coach. Phase 4, and it waits on the rating.
 - No email delivery of any kind. Invitations are links the admin copies.
 - No `docker-compose`.
 - No test suite. The two smoke scripts run against the real database and are
@@ -648,4 +642,95 @@ own**: the game page reads it for whoever is looking and passes it down, so two
 players in the same game sit at different boards, and a spectator at a third.
 Unknown keys fall back to the default rather than blanking the board, which is
 what makes it safe to retire a style later.
+
+## 17. Analysis: the third process
+
+Phase 3, and the brief's own diagram: a finished game goes into a queue, a
+Stockfish worker takes it out, and what comes back is structured analysis that
+ratings and the coach are both built on.
+
+### Why a third process
+
+The brief asks that "the Stockfish worker should be isolated from the live game
+server so heavy analysis cannot interfere with active games". A depth-16 search
+pins a core for a second or two per position, and an eighty-move game is
+eighty-one of them. Inside the socket process that is a stall in somebody's live
+game; inside the web tier it is a request that never returns.
+
+So `analysis/` is a third tier beside `app/` and `realtime/`, and the coupling
+is one table. **Nothing waits for it.** If the worker is off for a week the club
+plays chess exactly as before and the queue is a week long — which is the
+brief's "finishing a game must never require waiting for Stockfish" taken
+literally rather than as a nice intention.
+
+It polls, every five seconds. At this size that is indistinguishable from
+LISTEN/NOTIFY and there is nothing to get wrong.
+
+### The engine is a separate executable
+
+Stockfish is spawned and spoken to in UCI over a pipe: `STOCKFISH_PATH`, or
+`stockfish` on the PATH. It is not an npm dependency and not compiled in.
+
+Two reasons. It is the arm's-length footing under Stockfish's GPL — the club
+runs the distro's engine. And the WASM builds are markedly slower for no gain
+here, because nobody is waiting for the answer.
+
+`analysis/engine.ts` knows nothing about blunders. It reports what the engine
+said; `lib/chess/evaluation.ts` decides what that means, and is pure so the
+judgements can be argued with in one place.
+
+### A finished game is a queued game
+
+`analysis.enqueueIn(tx, gameId)` is called inside the same transaction that
+marks a game finished — both paths, the mating move and the shared
+`finish()` helper. There is no sweeper, and no window in which a game is over
+but not queued.
+
+### One search per position
+
+The engine scores the position *before* each move and names its preferred move.
+The score after the move actually played is the score of the *next* position,
+flipped. So an eighty-move game is eighty-one searches rather than a hundred and
+sixty, and every figure stored came from one consistent search.
+
+Positions are given to the engine as `startpos moves …` rather than as a FEN,
+for the same reason `positionAfter()` replays the move list: a bare FEN has
+forgotten the repetition and fifty-move history.
+
+### Two conventions worth not getting wrong
+
+- **Every score is from the point of view of the player who moved.** Positive is
+  good for them, whichever colour they are. An engine always scores the side to
+  move, so the score after a move needs flipping, and `analyseMove()` does that
+  flip so no call site has to remember.
+- **Evaluations are clamped to ±10 pawns before anything is subtracted.**
+  Without it, one bad move in an already-lost position produces a "loss" of
+  thousands of centipawns and swamps a child's average — but the game was gone
+  and the move barely mattered. Clamping is what makes average centipawn loss
+  mean "what did your moves cost you" rather than "how badly did you lose".
+
+Playing the engine's own move is graded `best` unconditionally, whatever the
+arithmetic says: two searches at a fixed depth can disagree by a few
+centipawns, and "your best move was an inaccuracy" is nonsense a child would
+notice.
+
+### Nothing is summarised
+
+`game_move_analysis` holds one row per half-move and no aggregates. Average
+centipawn loss, blunder counts and skill estimates are all derived on read,
+because the brief wants stored analysis to let historical ratings be
+recalculated as the algorithm improves — and an average stored in a column is
+an average computed by whatever the algorithm was that day.
+
+The engine and the depth are stored beside each analysis. The numbers are only
+comparable within one yardstick, and a rating recalculated across a depth change
+needs to know which rows are which.
+
+### The evaluation stays hidden during a game
+
+`analysis.forGame()` returns null for a game that is not finished — not as an
+optimisation but as the mechanism. The brief forbids players and spectators
+seeing Stockfish's view of a live game, and the cheapest way to keep that
+promise is to make the read impossible rather than to remember a check at every
+place that might render it.
 

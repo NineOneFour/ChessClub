@@ -33,7 +33,15 @@ their children's games and chat on the family page.
 
 Boards and pieces are choosable per member (`design.md` §16).
 
-Phase 3 (Stockfish analysis, ratings, coaching) has not started.
+**Phase 3 (Analysis) is started.** The queue, the Stockfish worker and
+per-move analysis with mistake/blunder grading are in and verified by
+`npm run smoke:analysis`. Still to do in phase 3: game performance estimates,
+the initial playing-strength estimator and rating history — the brief's items
+5, 7 and 8. Nothing reads the analysis into a number yet.
+
+**The worker needs a Stockfish binary** (`pacman -S stockfish`, or set
+`STOCKFISH_PATH`). Without one, the club works exactly as before and the queue
+grows; `smoke:analysis` skips its engine section and says so.
 
 ## Scale, and why it matters
 
@@ -145,6 +153,24 @@ A page never writes SQL. A service never imports from `app/`.
   expired on realtime startup — a board left out by somebody who has gone home
   would start a game against an empty chair. See `design.md` §10. This is why
   `offers.expireFor()` is called from `unregister()`.
+- **A finished game is a queued game.** `analysis.enqueueIn(tx, gameId)` runs
+  inside the same transaction that finishes a game, in both completion paths.
+  Don't add a sweeper; don't move it outside the transaction.
+- **Nothing ever waits for Stockfish.** The worker is a third process
+  (`analysis/`), it polls, and the club is unaffected when it is off. See
+  `design.md` §17 before coupling anything to it.
+- **Analysis scores are from the mover's point of view, and clamped to ±10
+  pawns.** An engine scores the side to move, so a score after a move must be
+  flipped — `analyseMove()` does it so no call site has to. The clamp is what
+  keeps one bad move in a lost position from swamping a child's average. Both
+  conventions are in `lib/chess/evaluation.ts`, which is pure.
+- **`analysis.forGame()` returns null for an unfinished game.** That is the
+  mechanism that keeps the engine's view hidden during a live game, not an
+  optimisation — don't add a path that reads the rows directly.
+- **No analysis figure is stored pre-aggregated.** One row per half-move, and
+  averages derived on read, so ratings can be recalculated when the algorithm
+  changes. The engine and depth are stored per game because the numbers are only
+  comparable within one yardstick.
 - **The database is the authority on every game.** Moves go through one locked
   transaction that replays the move list; the realtime service is transport and
   a clock watchdog, never the source of truth. Don't cache game state in the
@@ -170,10 +196,13 @@ A page never writes SQL. A service never imports from `app/`.
 ```bash
 npm run dev              # web tier only (port 3000)
 npm run dev:realtime     # socket service only, with reload
-npm run dev:all          # both, labelled
+npm run dev:all          # all three tiers, labelled
 npm run build            # production build (also regenerates route types)
 npm run start            # serve the build
 npm run realtime         # socket service, no reload
+npm run analysis         # Stockfish worker (needs a stockfish binary)
+npm run dev:analysis     # the worker, with reload
+npm run analysis:queue   # queue every finished game that has no analysis
 npm run typecheck        # tsc --noEmit
 npm run lint
 
@@ -187,6 +216,7 @@ npm run smoke:club       # service layer, end to end, against the real DB
 npm run smoke:realtime   # the socket, end to end (needs the service running)
 npm run smoke:chess      # rules, clocks, challenges, offers, games, PGN
 npm run smoke:play       # a whole game over the socket, with a spectator
+npm run smoke:analysis   # evaluation maths, the queue, and the engine
 npx tsx scripts/dev-fixture.ts   # two families, four kids, a conversation
 ```
 
