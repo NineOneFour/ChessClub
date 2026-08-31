@@ -390,6 +390,24 @@ already sends a member their challenge list on every change, so the offer
 reaches the other player *on the finished-game page they are still sitting on*
 — the game room listens for `challenges` and `gameStarted` for exactly this.
 
+### Reviewing a finished game
+
+The game room is the review screen — there is no separate one. A finished game
+just stops accepting moves, and the score sheet becomes the way back through
+it: tap a move, use the four controls under the sheet, or the arrow keys, which
+is what anybody who has used a chess site will try first.
+
+Stepping shows `game_moves.fen_after`, the FEN stored beside each half-move. So
+the browser still holds no chess logic, which is the §10 rule and not
+negotiable: even the check highlight is read off the `+` or `#` in the stored
+notation rather than worked out. The starting position is the one FEN with no
+row to come from, so it lives in `lib/chess/position.ts` — a leaf module,
+because `rules.ts` imports chess.js and a Client Component importing *that*
+would put an engine in the bundle.
+
+Stepping is offered only once the game is over. A board that wandered off while
+your opponent was thinking would be a way to miss a move.
+
 ### Open offers
 
 A challenge names an opponent. An **offer** doesn't: **Start a game** puts a

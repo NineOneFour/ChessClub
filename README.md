@@ -7,8 +7,10 @@ their real-world friends.
 - `design.md` — decisions and reasoning
 - `CLAUDE.md` — working notes, commands, and traps
 
-Phase 1 (clubhouse: accounts, invitations, presence, chat) is built. Chess is
-phase 2 and does not exist yet.
+Phase 1 (clubhouse: accounts, invitations, presence, chat) is built. So is
+phase 2 (chess): live two-player games with server-side rules, clocks,
+challenges, open offers, spectators and game chat. Phase 3 — Stockfish
+analysis and coaching — has not started.
 
 ## Getting started
 

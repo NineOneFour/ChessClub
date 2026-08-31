@@ -2,9 +2,14 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
-import type { ServerChatMessage, WireGame } from "@/realtime/protocol";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type {
+  ServerChatMessage,
+  WireGame,
+  WireMove,
+} from "@/realtime/protocol";
 import { formatClock } from "@/lib/chess/clock";
+import { STARTING_FEN } from "@/lib/chess/position";
 import { MAX_CHAT_LENGTH } from "@/lib/validation";
 import { Avatar, GrownUpTag } from "./Avatar";
 import { Board } from "./Board";
@@ -84,6 +89,58 @@ export function GameRoom({
     (playingAs === "black") !== flipped ? "black" : ("white" as const);
 
   /**
+   * Stepping through a finished game. `null` is the game as it stands, which
+   * is the only thing a live game ever shows — a board that wandered off
+   * while your opponent was thinking would be a way to miss a move.
+   */
+  const [reviewPly, setReviewPly] = useState<number | null>(null);
+  const total = game.moves.length;
+  const reviewable = game.status === "finished" && total > 0;
+  const at = reviewable ? reviewPly : null;
+  const shown = positionAt(game, at);
+
+  const step = useCallback(
+    (to: number | "first" | "back" | "on" | "last") => {
+      setReviewPly((current) => {
+        const from = current ?? total;
+        if (to === "first") return 0;
+        if (to === "last") return total;
+        if (to === "back") return Math.max(0, from - 1);
+        if (to === "on") return Math.min(total, from + 1);
+        return Math.min(total, Math.max(0, to));
+      });
+    },
+    [total],
+  );
+
+  // The arrow keys are how anybody who has used a chess site expects to walk a
+  // game, so they work on the whole page — except while a chat box has the
+  // focus, where left and right belong to the text.
+  useEffect(() => {
+    if (!reviewable) return;
+
+    const onKey = (event: KeyboardEvent) => {
+      const keys = {
+        ArrowLeft: "back",
+        ArrowRight: "on",
+        Home: "first",
+        End: "last",
+      } as const;
+      const wanted = keys[event.key as keyof typeof keys];
+      if (!wanted) return;
+
+      const target = event.target as HTMLElement | null;
+      if (target?.tagName === "INPUT" || target?.tagName === "TEXTAREA") return;
+
+      event.preventDefault();
+      step(wanted);
+    };
+
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [reviewable, step]);
+
+  /**
    * When the clock on screen hits zero, ask the server to check. The server
    * has its own watchdog, so this is a belt-and-braces path for the case where
    * the browser notices first — and `claimFlag` does nothing if there is
@@ -131,13 +188,13 @@ export function GameRoom({
 
         <div className="my-2">
           <Board
-            fen={game.fen}
+            fen={shown.fen}
             orientation={orientation}
-            dests={game.dests}
-            promotions={game.promotions}
-            lastMove={game.lastMove}
-            inCheck={game.inCheck}
-            turn={game.turn}
+            dests={at === null ? game.dests : {}}
+            promotions={at === null ? game.promotions : {}}
+            lastMove={shown.lastMove}
+            inCheck={shown.inCheck}
+            turn={shown.turn}
             playingAs={game.status === "active" ? playingAs : null}
             onMove={move}
           />
@@ -255,7 +312,11 @@ export function GameRoom({
             label="Score sheet"
             count={`${Math.ceil(game.ply / 2)} moves`}
           />
-          <ScoreSheet moves={game.moves} />
+          <ScoreSheet
+            moves={game.moves}
+            at={at}
+            onStep={reviewable ? step : null}
+          />
         </div>
 
         <div>
@@ -406,16 +467,74 @@ function Outcome({
 }
 
 /**
+ * The position to draw on the board.
+ *
+ * Live, that is simply the game as the server last sent it. Stepping through a
+ * finished game, it is the FEN the server stored beside each half-move — so
+ * even here the browser computes nothing. The check highlight is read off the
+ * `+` or `#` in the notation rather than worked out, for the same reason.
+ */
+function positionAt(game: WireGame, ply: number | null) {
+  if (ply === null) {
+    return {
+      fen: game.fen,
+      lastMove: game.lastMove,
+      inCheck: game.inCheck,
+      turn: game.turn,
+    };
+  }
+
+  if (ply === 0) {
+    return {
+      fen: STARTING_FEN,
+      lastMove: null,
+      inCheck: false,
+      turn: "white" as const,
+    };
+  }
+
+  const move = game.moves[ply - 1];
+
+  return {
+    fen: move.fenAfter,
+    lastMove: { from: move.uci.slice(0, 2), to: move.uci.slice(2, 4) },
+    inCheck: move.san.endsWith("+") || move.san.endsWith("#"),
+    turn: move.ply % 2 === 1 ? ("black" as const) : ("white" as const),
+  };
+}
+
+/**
  * The move list, set as an actual score sheet: numbered rows, white's move and
  * black's reply side by side. This is the shape the whole design borrows from,
  * so here it is literal.
+ *
+ * Once the game is over the moves become the way you walk back through it —
+ * `onStep` is null while it is still being played, and the sheet is then a
+ * plain list that follows along.
  */
-function ScoreSheet({ moves }: { moves: WireGame["moves"] }) {
+function ScoreSheet({
+  moves,
+  at,
+  onStep,
+}: {
+  moves: WireGame["moves"];
+  /** Half-move on the board, or null when the board is showing the live game. */
+  at: number | null;
+  onStep: ((to: number | "first" | "back" | "on" | "last") => void) | null;
+}) {
   const endRef = useRef<HTMLDivElement>(null);
+  const activeRef = useRef<HTMLButtonElement>(null);
+
+  // Follow the game while it is live; follow the reader once they take over.
+  useEffect(() => {
+    if (at !== null) return;
+    endRef.current?.scrollIntoView({ block: "end" });
+  }, [moves.length, at]);
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ block: "end" });
-  }, [moves.length]);
+    if (at === null) return;
+    activeRef.current?.scrollIntoView({ block: "nearest" });
+  }, [at]);
 
   if (moves.length === 0) {
     return (
@@ -425,25 +544,97 @@ function ScoreSheet({ moves }: { moves: WireGame["moves"] }) {
     );
   }
 
-  const pairs: { number: number; white?: string; black?: string }[] = [];
+  const pairs: { number: number; white?: WireMove; black?: WireMove }[] = [];
   for (const move of moves) {
     const index = Math.ceil(move.ply / 2);
     const pair = (pairs[index - 1] ??= { number: index });
-    if (move.ply % 2 === 1) pair.white = move.san;
-    else pair.black = move.san;
+    if (move.ply % 2 === 1) pair.white = move;
+    else pair.black = move;
   }
 
+  const cell = (move: WireMove | undefined) => {
+    if (!move) return <span className="w-16" />;
+
+    const active = move.ply === at;
+
+    if (!onStep) {
+      return <span className="w-16 font-mono text-sm">{move.san}</span>;
+    }
+
+    return (
+      <button
+        ref={active ? activeRef : null}
+        type="button"
+        aria-current={active ? "true" : undefined}
+        className={`w-16 text-left font-mono text-sm ${
+          active ? "bg-ink px-1 text-sheet" : "px-1 hover:bg-paper"
+        }`}
+        onClick={() => onStep(move.ply)}
+      >
+        {move.san}
+      </button>
+    );
+  };
+
   return (
-    <div className="sheet ruled max-h-[22rem] overflow-y-auto">
-      {pairs.map((pair) => (
-        <div key={pair.number} className="flex gap-3 px-3 py-1">
-          <span className="gutter">{pair.number}.</span>
-          <span className="w-16 font-mono text-sm">{pair.white ?? ""}</span>
-          <span className="w-16 font-mono text-sm">{pair.black ?? ""}</span>
+    <>
+      <div className="sheet ruled max-h-[22rem] overflow-y-auto">
+        {pairs.map((pair) => (
+          <div key={pair.number} className="flex items-center gap-3 px-3 py-1">
+            <span className="gutter">{pair.number}.</span>
+            {cell(pair.white)}
+            {cell(pair.black)}
+          </div>
+        ))}
+        <div ref={endRef} />
+      </div>
+
+      {onStep && (
+        <div className="mt-2 flex items-center gap-1">
+          <StepButton label="First move" onClick={() => onStep("first")}>
+            ⏮
+          </StepButton>
+          <StepButton label="Move back" onClick={() => onStep("back")}>
+            ◀
+          </StepButton>
+          <StepButton label="Move on" onClick={() => onStep("on")}>
+            ▶
+          </StepButton>
+          <StepButton label="Last move" onClick={() => onStep("last")}>
+            ⏭
+          </StepButton>
+          <span className="eyebrow ml-auto">
+            {at === null
+              ? "final position"
+              : at === 0
+                ? "before the first move"
+                : `move ${Math.ceil(at / 2)}`}
+          </span>
         </div>
-      ))}
-      <div ref={endRef} />
-    </div>
+      )}
+    </>
+  );
+}
+
+function StepButton({
+  label,
+  onClick,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  children: string;
+}) {
+  return (
+    <button
+      type="button"
+      className="btn btn-quiet px-2 py-1"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+    >
+      {children}
+    </button>
   );
 }
 

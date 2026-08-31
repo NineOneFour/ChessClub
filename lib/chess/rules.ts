@@ -13,8 +13,7 @@ import type { ResultReason, Result } from "../db/schema/games";
  * fifty-move rule, insufficient material and PGN output.
  */
 
-export const STARTING_FEN =
-  "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+export { STARTING_FEN } from "./position";
 
 export type Color = "white" | "black";
 

@@ -18,15 +18,16 @@ Guidance for Claude Code when working in this repository.
 invitations, profiles, presence and club chat all work end to end, verified by
 `npm run smoke:club` and `npm run smoke:realtime`.
 
-**Phase 2 (Chess) is all but complete.** Rules, clocks, challenges, open
+**Phase 2 (Chess) is complete.** Rules, clocks, challenges, open
 offers, rematches, moves, draws, resignation, flag falls, completion, history
 and PGN are verified by `npm run smoke:chess`; the board, the game rooms,
 spectating, reconnection and game chat by `npm run smoke:play`.
 
-Not built yet: **stepping through a finished game** move by move. The score
-sheet lists the moves and the board shows the final position, but nothing
-navigates between them — which is what `game_moves.fen_after` is for.
-That is the last item of phase 2's "and can review the game afterward".
+Reviewing a finished game walks the score sheet: tap a move, use the four
+controls, or the arrow keys. It shows `game_moves.fen_after` and holds no
+chess logic — see the trap about `lib/chess/position.ts` below.
+
+Phase 3 (Stockfish analysis, ratings, coaching) has not started.
 
 ## Scale, and why it matters
 
@@ -112,6 +113,14 @@ A page never writes SQL. A service never imports from `app/`.
   transaction that replays the move list; the realtime service is transport and
   a clock watchdog, never the source of truth. Don't cache game state in the
   socket process.
+- **The starting position lives in `lib/chess/position.ts`, not `rules.ts`.**
+  The board needs it — stepping back before white's first move has no stored
+  FEN to show — and `rules.ts` imports chess.js, so a Client Component
+  importing it would pull a chess engine into the browser bundle. Same leaf
+  discipline as `isGrownUp()`.
+- **The review stepper computes nothing.** Each half-move's position comes from
+  `game_moves.fen_after`, and the check highlight is read off the `+`/`#` in
+  the stored notation rather than worked out. Keep it that way.
 - **`positionAfter()` replays moves rather than loading the stored FEN.** That
   is what makes threefold repetition and the fifty-move count correct — a bare
   FEN silently loses them. The `fen` column is for display only.
