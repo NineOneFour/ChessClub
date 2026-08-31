@@ -1,12 +1,14 @@
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth/guards";
 import * as games from "@/lib/services/games";
+import * as ratings from "@/lib/services/ratings";
 import * as stats from "@/lib/services/stats";
 import * as users from "@/lib/services/users";
 import { canSeeRealName } from "@/lib/roles";
 import { GameList } from "@/app/components/GameList";
 import { MemberHeader } from "@/app/components/MemberHeader";
 import { RecordPanel, RivalryPanel } from "@/app/components/Stats";
+import { StrengthPanel } from "@/app/components/Strength";
 import { SectionHeading } from "@/app/components/SectionHeading";
 import { Shell } from "@/app/components/Shell";
 
@@ -35,14 +37,21 @@ export default async function MyCardPage() {
   const record = await users.getById(me.id);
   if (!record) notFound();
 
-  const [online, results, rivalries, recent] = await Promise.all([
-    users
-      .listClubMembers()
-      .then((list) => list.find((m) => m.id === me.id)?.isOnline ?? false),
-    stats.recordFor(me.id),
-    stats.rivalriesFor(me.id),
-    games.listForUser(me.id, RECENT_GAMES),
-  ]);
+  const [online, results, rivalries, recent, strength, performances] =
+    await Promise.all([
+      users
+        .listClubMembers()
+        .then((list) => list.find((m) => m.id === me.id)?.isOnline ?? false),
+      stats.recordFor(me.id),
+      stats.rivalriesFor(me.id),
+      games.listForUser(me.id, RECENT_GAMES),
+      ratings.strengthFor(me.id),
+      ratings.recentPerformances(me.id, RECENT_GAMES),
+    ]);
+
+  const levels = new Map(
+    performances.map((entry) => [entry.gameId, entry.performance.rating]),
+  );
 
   return (
     <Shell user={me} stamp="Your card">
@@ -59,6 +68,14 @@ export default async function MyCardPage() {
           />
 
           <div className="mt-8">
+            <SectionHeading label="Playing strength" />
+            <StrengthPanel
+              strength={strength}
+              empty="No analysed games long enough to judge yet. A rating needs a few real games — short ones don't count."
+            />
+          </div>
+
+          <div className="mt-8">
             <SectionHeading label="Record" />
             <RecordPanel
               record={results}
@@ -72,6 +89,7 @@ export default async function MyCardPage() {
               games={recent}
               viewerId={me.id}
               empty="Nothing played yet."
+              levels={levels}
             />
           </div>
         </div>

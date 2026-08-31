@@ -9,9 +9,10 @@ their real-world friends.
 
 Phase 1 (clubhouse: accounts, invitations, presence, chat) is built. So is
 phase 2 (chess): live two-player games with server-side rules, clocks,
-challenges, open offers, spectators, game chat and review. Phase 3 (analysis)
-is under way — the queue, the Stockfish worker and per-move blunder detection
-are in; ratings and the coach are not.
+challenges, open offers, spectators, game chat and review. Phase 3 (analysis) is
+built too: games are analysed by Stockfish in a separate worker, and each
+member's estimated playing strength is derived from how well they actually
+played rather than from who they beat. The AI coach (phase 4) is not built.
 
 ## Getting started
 

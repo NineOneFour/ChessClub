@@ -1,11 +1,13 @@
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth/guards";
 import * as games from "@/lib/services/games";
+import * as ratings from "@/lib/services/ratings";
 import * as stats from "@/lib/services/stats";
 import * as users from "@/lib/services/users";
 import { GameList } from "@/app/components/GameList";
 import { MemberHeader } from "@/app/components/MemberHeader";
 import { RecordPanel } from "@/app/components/Stats";
+import { StrengthPanel } from "@/app/components/Strength";
 import { SectionHeading } from "@/app/components/SectionHeading";
 import { Shell } from "@/app/components/Shell";
 
@@ -36,12 +38,13 @@ export default async function ProfilePage({
   const member = await users.getByUsername(username);
   if (!member || !member.isActive) notFound();
 
-  const [online, record, recent] = await Promise.all([
+  const [online, record, recent, strength] = await Promise.all([
     users
       .listClubMembers()
       .then((list) => list.find((m) => m.id === member.id)?.isOnline ?? false),
     stats.recordFor(member.id),
     games.listForUser(member.id, RECENT_GAMES),
+    ratings.strengthFor(member.id),
   ]);
 
   const mine = member.id === me.id;
@@ -57,6 +60,18 @@ export default async function ProfilePage({
           online={online}
           lastSeenAt={member.lastSeenAt}
         />
+
+        <div className="mt-8">
+          <SectionHeading label="Playing strength" />
+          <StrengthPanel
+            strength={strength}
+            empty={
+              mine
+                ? "No analysed games long enough to judge yet."
+                : `Not enough of ${member.username}'s games have been analysed yet.`
+            }
+          />
+        </div>
 
         <div className="mt-8">
           <SectionHeading label="Record" />

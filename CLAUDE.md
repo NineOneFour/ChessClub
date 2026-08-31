@@ -33,11 +33,15 @@ their children's games and chat on the family page.
 
 Boards and pieces are choosable per member (`design.md` §16).
 
-**Phase 3 (Analysis) is started.** The queue, the Stockfish worker and
-per-move analysis with mistake/blunder grading are in and verified by
-`npm run smoke:analysis`. Still to do in phase 3: game performance estimates,
-the initial playing-strength estimator and rating history — the brief's items
-5, 7 and 8. Nothing reads the analysis into a number yet.
+**Phase 3 (Analysis) is complete.** The queue, the Stockfish worker, per-move
+analysis with blunder grading, per-game performance estimates, the
+playing-strength estimator and rating history are all in and verified by
+`npm run smoke:analysis`. Strength shows on the cards; a per-game level shows in
+the game room to the players once the game is analysed.
+
+Not built, and deliberately: the skill breakdown by opening/tactics/middlegame/
+endgame. The brief lists it as an eventual extension rather than a phase 3 item.
+Phase 4 (the LLM coach) has not started.
 
 **The worker needs a Stockfish binary.** It is *not* in the Arch/Manjaro repos
 — AUR (`yay -S stockfish`) or build from source; see the README. On this machine
@@ -175,6 +179,15 @@ A page never writes SQL. A service never imports from `app/`.
   averages derived on read, so ratings can be recalculated when the algorithm
   changes. The engine and depth are stored per game because the numbers are only
   comparable within one yardstick.
+- **No rating is stored anywhere.** There is no ratings table and no rating
+  column: a rating is a query over `game_move_analysis`, so changing a constant
+  in `lib/chess/rating.ts` re-rates everybody and redraws every historical
+  rating. Don't add a cache — see `design.md` §18.
+- **The rating never looks at who won.** Not opponent Elo, on purpose: beating
+  the same friend repeatedly must not move it. Four signals over the moves, and
+  every one of them should be sanity-checked against "what does this say about
+  someone playing at random?" — random legal moves must rate at the floor. A
+  signal that counted only mistakes and inaccuracies once rated random play 548.
 - **The database is the authority on every game.** Moves go through one locked
   transaction that replays the move list; the realtime service is transport and
   a clock watchdog, never the source of truth. Don't cache game state in the

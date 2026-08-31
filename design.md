@@ -466,9 +466,10 @@ Not oversights — scope:
   them, because a kid called to dinner should be able to come back.
 - No direct messages (the brief excludes them from the MVP).
 - No chat pagination — the clubhouse loads the last 100 messages.
-- No rating yet. The analysis is stored; nothing reads it into a number. That
-  is the rest of phase 3 — see §17.
-- No coach. Phase 4, and it waits on the rating.
+- No skill breakdown by opening/tactics/middlegame/endgame. The brief lists it
+  as an eventual extension; it wants a phase-of-game boundary the stored
+  analysis does not mark. See §18.
+- No coach. Phase 4.
 - No email delivery of any kind. Invitations are links the admin copies.
 - No `docker-compose`.
 - No test suite. The two smoke scripts run against the real database and are
@@ -735,4 +736,90 @@ optimisation but as the mechanism. The brief forbids players and spectators
 seeing Stockfish's view of a live game, and the cheapest way to keep that
 promise is to make the read impossible rather than to remember a check at every
 place that might render it.
+
+## 18. Playing strength
+
+The brief is blunt about what this must not be: "the primary displayed chess
+rating should **not** simply be traditional opponent-based Elo", because
+"repeatedly beating the same weaker friend should not cause someone's rating to
+continually increase". With eight children and five families, opponent-based
+Elo would mostly measure who has the weakest sibling.
+
+So **nothing in the estimator looks at who won, or at who they were playing.**
+It looks at the moves, through Stockfish's eyes. `lib/chess/rating.ts` is the
+whole algorithm and is pure; `lib/services/ratings.ts` does the reading.
+
+### Nothing is stored
+
+There is no ratings table, no cached number and no rating column. A rating is a
+query over `game_move_analysis`, so changing one constant in `rating.ts`
+re-rates every member and redraws every historical rating at once, with no
+migration and no stale column to notice later. That is the brief's "store the
+underlying game analysis so historical ratings can be recalculated as the
+algorithm improves", taken at its word — and at twenty games of forty moves it
+is eight hundred rows, which is nothing.
+
+**Rating history is a `map`, not a table.** The rating after game *n* is the
+estimator run over the games up to *n*.
+
+### Four signals, not one
+
+The brief says "do not assume that average centipawn loss alone maps directly to
+player rating", so four things vote, each mapped to a rating and then weighted:
+
+| Signal | Weight | Why it is separate |
+| --- | ---: | --- |
+| Average centipawn loss | 0.40 | Uses every move |
+| Blunders per 100 moves | 0.30 | A good average can still hide one piece given away a game |
+| Imprecise moves per 100 | 0.15 | How often they are simply not finding the move |
+| Share of engine's own move | 0.15 | Least trusted: most sensitive to search depth |
+
+**The constants are a first pass fitted to nothing**, and the module says so in
+its own header. There is no corpus of rated children's games to fit against. The
+curves agree roughly with the published centipawn-loss folklore at the ends and
+are smooth and monotonic in between. They are all named and in one file so that
+when there are two hundred real games the argument is about numbers rather than
+about code. A rating from this is "about right, to the nearest hundred", and the
+UI says *provisional* until there are five rated games.
+
+One bug worth remembering, because it is the shape of mistake this design
+invites: the imprecision signal originally counted only inaccuracies and
+mistakes, so a player whose bad moves were *all* catastrophic scored as though
+they hardly ever slipped. The first real analysis rated **random legal moves at
+548**. Blunders now count as imprecise too, and random play rates 301 — the
+floor. Every signal should be checked against "what does this say about someone
+playing at random?"
+
+### Stability
+
+The brief's list, in order:
+
+- A rolling sample of the **20** most recent rated games.
+- **Recency weighting**, decaying 0.93 per game back, so the newest game carries
+  about 8% of a full sample.
+- **Length weighting**: a game gets its full say at 25 moves and a proportionate
+  say below.
+- **Unusual games excluded**: a game needs **8** of the player's own moves to be
+  rated at all. Very short games, opening traps, early resignations and
+  disconnects are mostly this one condition.
+- **The best and worst are trimmed** once the sample reaches six games. This is
+  what actually delivers "one unusually strong game should not suddenly add
+  hundreds of points" and "one terrible game should not destroy a player's
+  rating" — a weighted mean cannot, because the newest game is also the
+  heaviest. The smoke suite asserts both, with a hundred-point bound.
+
+### Where it shows
+
+- **`/card` and the public profile** show current estimated strength, with the
+  best and worst single games in the sample for context. It is the brief's
+  "current estimated chess strength" on a profile.
+- **Your own card** shows what each recent game was worth, beside it in the
+  list. The public card does not: a per-game level is yours.
+- **The game room** says "you played this game at about 548 level", to the two
+  players and only once the game is finished and analysed — the brief's own
+  sentence, and its rule that Stockfish's view is not available during play.
+
+Not built: the skill breakdown by opening/tactics/middlegame/endgame. The brief
+lists it as an eventual extension rather than a phase 3 item, and it wants a
+phase-of-game boundary that the stored analysis does not yet mark.
 

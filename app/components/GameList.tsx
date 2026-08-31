@@ -24,10 +24,16 @@ export function GameList({
   games: list,
   viewerId,
   empty,
+  levels,
 }: {
   games: games.GameSummary[];
   viewerId: number;
   empty: string;
+  /**
+   * Optional: what the viewer's play in each game was worth, by game id. Only
+   * your own card passes it — a per-game level is yours, not the club's.
+   */
+  levels?: Map<number, number | null>;
 }) {
   if (list.length === 0) {
     return <p className="text-sm text-ink-soft">{empty}</p>;
@@ -59,6 +65,12 @@ export function GameList({
             <span className="whitespace-nowrap font-mono text-[0.65rem] text-ink-soft">
               {game.timeControl} · {Math.ceil(game.ply / 2)} moves
             </span>
+
+            {levels && (
+              <span className="w-16 whitespace-nowrap text-right font-mono text-[0.65rem] text-brass">
+                {levels.get(game.id) ? `≈${levels.get(game.id)}` : ""}
+              </span>
+            )}
 
             <span
               className={`w-28 whitespace-nowrap text-right font-mono text-[0.65rem] ${

@@ -9,10 +9,12 @@ import type {
   WireMove,
 } from "@/realtime/protocol";
 import { formatClock } from "@/lib/chess/clock";
+import type { GamePerformance } from "@/lib/chess/rating";
 import { STARTING_FEN } from "@/lib/chess/position";
 import { MAX_CHAT_LENGTH } from "@/lib/validation";
 import { Avatar, GrownUpTag } from "./Avatar";
 import { Board } from "./Board";
+import { PerformanceLine } from "./Strength";
 import { SectionHeading } from "./SectionHeading";
 import { useGameSocket, useLiveClock } from "./useGameSocket";
 
@@ -29,6 +31,7 @@ export function GameRoom({
   viewerId,
   canChat,
   chatBlockedReason,
+  performance,
   boardStyle,
   pieceSet,
 }: {
@@ -38,6 +41,12 @@ export function GameRoom({
   viewerId: number;
   canChat: boolean;
   chatBlockedReason: string | null;
+  /**
+   * What the viewer's own play in this game was worth, once it is over and
+   * analysed. Null for a spectator, a live game, or one Stockfish hasn't
+   * reached yet.
+   */
+  performance: GamePerformance | null;
   /** The viewer's own board and pieces. Null falls back to the default. */
   boardStyle: string | null;
   pieceSet: string | null;
@@ -311,6 +320,8 @@ export function GameRoom({
         )}
 
         <Outcome game={game} viewerId={viewerId} playingAs={playingAs} />
+
+        {performance && <PerformanceLine performance={performance} />}
       </section>
 
       <aside className="space-y-8">
