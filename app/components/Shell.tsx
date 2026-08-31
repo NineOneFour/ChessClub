@@ -53,7 +53,7 @@ export function Shell({
           </form>
           <Link href="/me" className="flex items-center gap-2">
             <Avatar avatar={user.avatar} role={user.role} size="sm" />
-            <span className="font-mono text-xs">{user.displayName}</span>
+            <span className="font-mono text-xs">{user.username}</span>
           </Link>
         </nav>
       </header>

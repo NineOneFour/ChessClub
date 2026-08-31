@@ -19,9 +19,9 @@ export function JoinForm({
   return (
     <form action={action} className="sheet mt-6 space-y-4 p-5">
       <Field
-        name="displayName"
-        label="Your name"
-        hint="What the other families see."
+        name="realName"
+        label="Your real name"
+        hint="Private to your family. The club sees your username."
         required
         maxLength={40}
         autoComplete="name"
@@ -29,7 +29,7 @@ export function JoinForm({
       <Field
         name="username"
         label="Username"
-        hint="Lower case, no spaces. This is what you sign in with."
+        hint="Lower case, no spaces. You sign in with this, and it is what everyone in the club sees."
         required
         mono
         maxLength={24}

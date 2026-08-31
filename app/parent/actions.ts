@@ -37,7 +37,7 @@ export async function addChild(
 
     await users.create({
       username: formData.get("username"),
-      displayName: formData.get("displayName"),
+      realName: formData.get("realName"),
       password: formData.get("password"),
       role: "child",
       familyId: parent.familyId,
@@ -70,7 +70,7 @@ export async function resetChildPassword(
     const { parent, child } = await managedChild(childId);
     await users.setPassword(child.id, formData.get("password"), parent.id);
     return {
-      ok: `${child.displayName} will need to sign in again with the new password.`,
+      ok: `${child.realName} will need to sign in again with the new password.`,
     };
   });
 }

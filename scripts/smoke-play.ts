@@ -133,7 +133,7 @@ async function main() {
   for (const name of ["Ellie", "Max", "Ada"]) {
     const id = await usersService.create({
       username: `${name.toLowerCase()}-${SUFFIX}`,
-      displayName: name,
+      realName: name,
       password: "smoke-password",
       role: "child",
       familyId,

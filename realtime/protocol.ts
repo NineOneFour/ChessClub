@@ -5,6 +5,10 @@
  * optimise, and being able to read the frames in devtools is worth more than a
  * compact encoding.
  *
+ * Members are identified on the wire by `username` and never by their real
+ * name: real names are private to the family (see design.md §13), and the
+ * simplest way to keep them private is for the socket to never carry one.
+ *
  * This file has no imports on purpose. Both the browser bundle and the Node
  * service compile it, so nothing here may reach for the database, and the wire
  * types are declared structurally rather than borrowed from the services.
@@ -36,7 +40,6 @@ export type ClientFrame =
 export type OnlineMember = {
   id: number;
   username: string;
-  displayName: string;
   avatar: string;
   role: string;
 };
@@ -45,7 +48,7 @@ export type ServerChatMessage = {
   id: number;
   channel: string;
   userId: number;
-  displayName: string;
+  username: string;
   avatar: string;
   role: string;
   body: string;
@@ -56,7 +59,6 @@ export type ServerChatMessage = {
 export type WirePlayer = {
   id: number;
   username: string;
-  displayName: string;
   avatar: string;
   role: string;
 };
@@ -112,11 +114,9 @@ export type WireGame = {
 export type WireChallenge = {
   id: number;
   fromId: number;
-  fromName: string;
-  fromAvatar: string;
   fromUsername: string;
+  fromAvatar: string;
   toId: number;
-  toName: string;
   toUsername: string;
   color: string;
   timeControl: string;
@@ -124,9 +124,9 @@ export type WireChallenge = {
 
 export type WireGameCard = {
   id: number;
-  whiteName: string;
+  whiteUsername: string;
   whiteAvatar: string;
-  blackName: string;
+  blackUsername: string;
   blackAvatar: string;
   timeControl: string;
   ply: number;

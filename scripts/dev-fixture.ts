@@ -19,7 +19,7 @@ async function main() {
     const familyId = await users.createFamily(family);
     await users.create({
       username: family.split(" ")[1].toLowerCase(),
-      displayName: `${family.split(" ")[1]} parent`,
+      realName: `${family.split(" ")[1]} parent`,
       password: "chessclub-dev",
       role: "parent",
       familyId,
@@ -29,7 +29,7 @@ async function main() {
       kids.push(
         await users.create({
           username: name.toLowerCase(),
-          displayName: name,
+          realName: name,
           password: "chessclub-dev",
           role: "child",
           familyId,

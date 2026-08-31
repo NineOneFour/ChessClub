@@ -42,10 +42,9 @@ export default async function ClubhousePage() {
         myActiveGameId={myActiveGameId}
         initialOnline={roster
           .filter((member) => member.isOnline)
-          .map(({ id, username, displayName, avatar, role }) => ({
+          .map(({ id, username, avatar, role }) => ({
             id,
             username,
-            displayName,
             avatar,
             role,
           }))}
@@ -57,9 +56,9 @@ export default async function ClubhousePage() {
         initialOutgoing={outgoing}
         initialLiveGames={liveGames.map((game) => ({
           id: game.id,
-          whiteName: game.white.displayName,
+          whiteUsername: game.white.username,
           whiteAvatar: game.white.avatar,
-          blackName: game.black.displayName,
+          blackUsername: game.black.username,
           blackAvatar: game.black.avatar,
           timeControl: game.timeControl,
           ply: game.ply,

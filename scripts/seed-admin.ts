@@ -19,7 +19,7 @@ import { normalizeUsername } from "../lib/validation";
 async function main() {
   const username = normalizeUsername(process.env.ADMIN_USERNAME);
   const password = process.env.ADMIN_PASSWORD;
-  const displayName = process.env.ADMIN_DISPLAY_NAME ?? "Administrator";
+  const realName = process.env.ADMIN_REAL_NAME ?? "Administrator";
 
   if (!password) {
     throw new Error("Set ADMIN_PASSWORD before running seed:admin.");
@@ -43,7 +43,7 @@ async function main() {
   } else {
     await usersService.create({
       username,
-      displayName,
+      realName,
       password,
       role: "admin",
       familyId: null,

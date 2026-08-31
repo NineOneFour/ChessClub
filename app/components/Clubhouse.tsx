@@ -18,7 +18,6 @@ import { useClubSocket } from "./useClubSocket";
 export type RosterMember = {
   id: number;
   username: string;
-  displayName: string;
   avatar: string;
   familyName: string | null;
   role: string;
@@ -114,7 +113,7 @@ export function Clubhouse({
                 className="flex flex-wrap items-center gap-3 px-3 py-2"
               >
                 <Avatar avatar={item.fromAvatar} size="sm" />
-                <span className="text-sm font-semibold">{item.fromName}</span>
+                <span className="text-sm font-semibold">{item.fromUsername}</span>
                 <span className="font-mono text-xs text-ink-soft">
                   {item.timeControl}
                   {item.color !== "random" && ` · wants ${item.color}`}
@@ -184,7 +183,7 @@ export function Clubhouse({
                       <Avatar avatar={game.whiteAvatar} size="sm" />
                       <Avatar avatar={game.blackAvatar} size="sm" />
                       <span className="min-w-0 flex-1 truncate text-xs">
-                        {game.whiteName} v {game.blackName}
+                        {game.whiteUsername} v {game.blackUsername}
                       </span>
                       <span className="eyebrow">Watch</span>
                     </Link>
@@ -225,7 +224,7 @@ export function Clubhouse({
                 {outgoing.map((item) => (
                   <li key={item.id} className="flex items-center gap-2 text-sm">
                     <span className="min-w-0 flex-1 truncate">
-                      {item.toName}
+                      {item.toUsername}
                       <span className="ml-1 font-mono text-[0.65rem] text-ink-soft">
                         {item.timeControl}
                       </span>
@@ -299,7 +298,7 @@ function MemberRow({
         <span className="min-w-0">
           <span className="flex items-center gap-1.5">
             <span className="truncate text-sm font-medium">
-              {member.displayName}
+              {member.username}
             </span>
             <GrownUpTag role={member.role} />
           </span>
@@ -358,7 +357,7 @@ function ChallengeDialog({
         onClick={(event) => event.stopPropagation()}
       >
         <p className="eyebrow">Challenge</p>
-        <h2 className="masthead mt-1 text-2xl">{member.displayName}</h2>
+        <h2 className="masthead mt-1 text-2xl">{member.username}</h2>
 
         <fieldset className="mt-4">
           <legend className="eyebrow">I&apos;ll play</legend>
@@ -468,7 +467,7 @@ function Transcript({
                       message.userId === meId ? "text-brass" : ""
                     }`}
                   >
-                    {message.displayName}
+                    {message.username}
                   </span>
                   <GrownUpTag role={message.role} />
                   <time

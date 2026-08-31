@@ -35,8 +35,14 @@ export const users = pgTable(
     id: serial("id").primaryKey(),
     /** Lower-cased login handle. Unique across the club. */
     username: text("username").notNull(),
-    /** What everyone actually sees. Free-form, may contain spaces/caps. */
-    displayName: text("display_name").notNull(),
+    /**
+     * The member's real-world name. Free-form, may contain spaces/caps.
+     *
+     * Private: shown only to the member themselves and to grown-ups in the
+     * same family. Everyone else — including the administrator, for families
+     * other than their own — sees the username. See design.md §13.
+     */
+    realName: text("real_name").notNull(),
     passwordHash: text("password_hash").notNull(),
     role: text("role").notNull(),
     /** Null only for the administrator, who belongs to no family. */

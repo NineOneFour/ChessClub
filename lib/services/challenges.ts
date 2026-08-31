@@ -20,11 +20,9 @@ export type ColorChoice = (typeof COLOR_CHOICES)[number];
 export type Challenge = {
   id: number;
   fromId: number;
-  fromName: string;
   fromAvatar: string;
   fromUsername: string;
   toId: number;
-  toName: string;
   toUsername: string;
   color: ColorChoice;
   timeControl: string;
@@ -36,11 +34,9 @@ export type Challenge = {
 const challengeColumns = {
   id: challenges.id,
   fromId: challenges.fromId,
-  fromName: sql<string>`f.display_name`,
   fromAvatar: sql<string>`f.avatar`,
   fromUsername: sql<string>`f.username`,
   toId: challenges.toId,
-  toName: sql<string>`t.display_name`,
   toUsername: sql<string>`t.username`,
   color: challenges.color,
   initialMs: challenges.initialMs,
@@ -96,7 +92,7 @@ export async function create(input: {
     : "random";
 
   const opponentRows = await db
-    .select({ id: users.id, displayName: users.displayName })
+    .select({ id: users.id, username: users.username })
     .from(users)
     .where(
       and(
@@ -114,7 +110,7 @@ export async function create(input: {
     fail("Finish the game you're in first.");
   }
   if (await games.activeGameFor(opponent.id)) {
-    fail(`${opponent.displayName} is already playing.`);
+    fail(`${opponent.username} is already playing.`);
   }
 
   try {
@@ -134,7 +130,7 @@ export async function create(input: {
     // wraps driver errors, so the constraint name is down the cause chain
     // rather than on the error itself.
     if (mentions(err, "challenges_open_pair_key")) {
-      fail(`You've already challenged ${opponent.displayName}.`);
+      fail(`You've already challenged ${opponent.username}.`);
     }
     throw err;
   }

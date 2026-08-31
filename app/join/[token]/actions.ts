@@ -15,7 +15,7 @@ export async function acceptInvitation(
     const userId = await invitations.accept({
       token,
       username: formData.get("username"),
-      displayName: formData.get("displayName"),
+      realName: formData.get("realName"),
       password: formData.get("password"),
       email: formData.get("email"),
     });

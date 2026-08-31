@@ -121,7 +121,7 @@ async function main() {
   for (const name of ["Ada", "Bruno"]) {
     const id = await usersService.create({
       username: `${name.toLowerCase()}-${SUFFIX}`,
-      displayName: name,
+      realName: name,
       password: "smoke-password",
       role: "child",
       familyId,
@@ -189,8 +189,8 @@ async function main() {
     "Bruno's message reaching Ada",
   );
   check(
-    "message carries the author's name",
-    delivered.message.displayName === "Bruno",
+    "message carries the author's username, never their real name",
+    delivered.message.username === `bruno-${SUFFIX}`,
   );
   check(
     "message carries the author's role, so the transcript can tag grown-ups",

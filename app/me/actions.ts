@@ -12,7 +12,7 @@ export async function updateMyProfile(
   return withFormErrors(async () => {
     const me = await requireUser();
     await users.updateProfile(me.id, {
-      displayName: formData.get("displayName"),
+      realName: formData.get("realName"),
       avatar: formData.get("avatar"),
     });
     revalidatePath("/me");

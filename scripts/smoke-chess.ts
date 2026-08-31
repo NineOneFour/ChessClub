@@ -191,7 +191,7 @@ async function main() {
     ["Ellie", "Max", "Ada"].map((name) =>
       usersService.create({
         username: `${name.toLowerCase()}-${SUFFIX}`,
-        displayName: name,
+        realName: name,
         password: "smoke-password",
         role: "child",
         familyId,
@@ -445,7 +445,12 @@ async function main() {
   const pgn = (await gamesService.toPgn(mateGameId))!;
   check("PGN has the moves", pgn.includes("1. e4 e5 2. Bc4 Nc6"));
   check("and the result", pgn.includes('[Result "1-0"]'));
-  check("and both players", pgn.includes('[White "Ellie"]') && pgn.includes('[Black "Max"]'));
+  // The PGN is a public artefact, so it carries usernames, never real names.
+  check(
+    "and both players, by username",
+    pgn.includes(`[White "ellie-${SUFFIX}"]`) &&
+      pgn.includes(`[Black "max-${SUFFIX}"]`),
+  );
   check("and the termination", pgn.includes('[Termination "checkmate"]'));
 
   console.log("Concurrency");

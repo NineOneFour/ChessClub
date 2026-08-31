@@ -103,10 +103,10 @@ function GameList({
 
             <span className="flex min-w-0 flex-1 items-center gap-2">
               <Avatar avatar={game.white.avatar} role={game.white.role} size="sm" />
-              <span className="truncate text-sm">{game.white.displayName}</span>
+              <span className="truncate text-sm">{game.white.username}</span>
               <span className="font-mono text-xs text-ink-soft">v</span>
               <Avatar avatar={game.black.avatar} role={game.black.role} size="sm" />
-              <span className="truncate text-sm">{game.black.displayName}</span>
+              <span className="truncate text-sm">{game.black.username}</span>
             </span>
 
             <span className="whitespace-nowrap font-mono text-[0.65rem] text-ink-soft">

@@ -68,7 +68,7 @@ export default async function ParentPage() {
                         <Avatar avatar={child.avatar} size="md" />
                         <div>
                           <h3 className="masthead text-xl">
-                            {child.displayName}
+                            {child.realName}
                           </h3>
                           <p className="font-mono text-xs text-ink-soft">
                             @{child.username}
@@ -149,7 +149,7 @@ export default async function ParentPage() {
                     </time>
                     <div className="min-w-0">
                       <span className="text-sm font-semibold">
-                        {message.displayName}
+                        {message.username}
                       </span>
                       <p
                         className={`whitespace-pre-wrap break-words text-[0.95rem] leading-snug ${

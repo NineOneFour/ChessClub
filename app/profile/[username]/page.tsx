@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth/guards";
 import * as users from "@/lib/services/users";
+import { canSeeRealName } from "@/lib/roles";
 import { Avatar, GrownUpTag } from "@/app/components/Avatar";
 import { SectionHeading } from "@/app/components/SectionHeading";
 import { Shell } from "@/app/components/Shell";
@@ -24,6 +25,10 @@ export default async function ProfilePage({
   const member = await users.getByUsername(username);
   if (!member || !member.isActive) notFound();
 
+  // A card shows the username to everyone. The real name is for the member
+  // themselves and the grown-ups in their family — see lib/roles.ts.
+  const showRealName = canSeeRealName(me, member);
+
   const online = await users
     .listClubMembers()
     .then((list) => list.find((m) => m.id === member.id)?.isOnline ?? false);
@@ -40,12 +45,14 @@ export default async function ProfilePage({
           />
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="masthead text-3xl">{member.displayName}</h1>
+              <h1 className="masthead text-3xl">@{member.username}</h1>
               <GrownUpTag role={member.role} />
             </div>
+            {showRealName && (
+              <p className="mt-1 text-sm">{member.realName}</p>
+            )}
             <p className="mt-1 font-mono text-xs text-ink-soft">
-              @{member.username}
-              {member.familyName ? ` · ${member.familyName}` : ""}
+              {member.familyName ?? ""}
             </p>
             <p className="mt-3 text-sm text-ink-soft">
               {online

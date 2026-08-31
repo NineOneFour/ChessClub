@@ -14,7 +14,7 @@ export function ChildControls({
 }: {
   child: {
     id: number;
-    displayName: string;
+    realName: string;
     chatEnabled: boolean;
     isActive: boolean;
     isMuted: boolean;
@@ -45,7 +45,7 @@ export function ChildControls({
 
       {child.isMuted && (
         <p className="border-l-2 border-stamp pl-3 text-sm text-stamp">
-          The club administrator has muted {child.displayName} in chat. Only
+          The club administrator has muted {child.realName} in chat. Only
           they can lift that.
         </p>
       )}

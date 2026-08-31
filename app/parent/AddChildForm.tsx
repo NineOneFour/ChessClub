@@ -10,16 +10,16 @@ export function AddChildForm({ minPasswordLength }: { minPasswordLength: number 
   return (
     <form action={action} className="sheet space-y-4 p-5">
       <Field
-        name="displayName"
-        label="Their name"
-        hint="What the other kids see in the clubhouse."
+        name="realName"
+        label="Their real name"
+        hint="Only you see this. The club sees their username."
         required
         maxLength={40}
       />
       <Field
         name="username"
         label="Username"
-        hint="Lower case, no spaces. This is what they sign in with."
+        hint="Lower case, no spaces. They sign in with this, and it is what everyone in the club sees."
         required
         mono
         maxLength={24}

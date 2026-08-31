@@ -108,6 +108,22 @@ function broadcastToRoom(gameId: number, frame: ServerFrame) {
   }
 }
 
+/* --- fire and forget ------------------------------------------------------ */
+
+/**
+ * Start work nobody awaits, and make sure a failure is logged rather than
+ * thrown into the void.
+ *
+ * A bare `void somePromise()` turns any rejection into an unhandled rejection,
+ * which by default takes the whole process down — and this process is the club
+ * for everyone currently connected. One member's socket closing on a bad
+ * database write must not disconnect the other seven, so every detached call
+ * goes through here.
+ */
+function detach(label: string, work: () => Promise<unknown>) {
+  work().catch((err) => console.error(`[realtime] ${label} failed`, err));
+}
+
 /* --- presence ------------------------------------------------------------ */
 
 function onlineMembers(): OnlineMember[] {
@@ -117,11 +133,10 @@ function onlineMembers(): OnlineMember[] {
     .map((user) => ({
       id: user.id,
       username: user.username,
-      displayName: user.displayName,
       avatar: user.avatar,
       role: user.role,
     }))
-    .sort((a, b) => a.displayName.localeCompare(b.displayName));
+    .sort((a, b) => a.username.localeCompare(b.username));
 }
 
 function broadcastPresence() {
@@ -179,11 +194,9 @@ function toWireChallenge(challenge: challenges.Challenge): WireChallenge {
   return {
     id: challenge.id,
     fromId: challenge.fromId,
-    fromName: challenge.fromName,
     fromAvatar: challenge.fromAvatar,
     fromUsername: challenge.fromUsername,
     toId: challenge.toId,
-    toName: challenge.toName,
     toUsername: challenge.toUsername,
     color: challenge.color,
     timeControl: challenge.timeControl,
@@ -193,9 +206,9 @@ function toWireChallenge(challenge: challenges.Challenge): WireChallenge {
 function toWireCard(summary: gamesService.GameSummary): WireGameCard {
   return {
     id: summary.id,
-    whiteName: summary.white.displayName,
+    whiteUsername: summary.white.username,
     whiteAvatar: summary.white.avatar,
-    blackName: summary.black.displayName,
+    blackUsername: summary.black.username,
     blackAvatar: summary.black.avatar,
     timeControl: summary.timeControl,
     ply: summary.ply,
@@ -413,6 +426,15 @@ async function handleWatch(connection: Connection, gameId: number) {
   scheduleFlagCheck(state);
 }
 
+/** `handleGameAction`, detached — the socket's message loop cannot await. */
+function detachGameAction(
+  connection: Connection,
+  gameId: number,
+  action: (userId: number) => Promise<gamesService.MoveOutcome>,
+) {
+  detach("game action", () => handleGameAction(connection, gameId, action));
+}
+
 /**
  * Every game action goes through here: re-check who is asking, hand the action
  * to the service, publish whatever state comes back. The service decides
@@ -567,7 +589,6 @@ wss.on(
       me: {
         id: user.id,
         username: user.username,
-        displayName: user.displayName,
         avatar: user.avatar,
         role: user.role,
       },
@@ -575,11 +596,11 @@ wss.on(
       chatBlockedReason: speak.ok ? undefined : speak.reason,
     });
 
-    void (async () => {
+    detach("registering a connection", async () => {
       await register(connection);
       await publishChallenges(user.id);
       await publishLobby();
-    })();
+    });
 
     ws.on("message", (data) => {
       const frame = decodeClientFrame(data.toString());
@@ -590,16 +611,18 @@ wss.on(
           send(ws, { t: "pong" });
           break;
         case "chat":
-          void handleChat(connection, frame);
+          detach("chat", () => handleChat(connection, frame));
           break;
         case "watch":
-          void handleWatch(connection, frame.gameId);
+          detach("watching a game", () =>
+            handleWatch(connection, frame.gameId),
+          );
           break;
         case "unwatch":
           leaveRoom(connection, frame.gameId);
           break;
         case "move":
-          void handleGameAction(connection, frame.gameId, (userId) =>
+          detachGameAction(connection, frame.gameId, (userId) =>
             gamesService.playMove(frame.gameId, userId, {
               from: frame.from,
               to: frame.to,
@@ -608,28 +631,28 @@ wss.on(
           );
           break;
         case "resign":
-          void handleGameAction(connection, frame.gameId, (userId) =>
+          detachGameAction(connection, frame.gameId, (userId) =>
             gamesService.resign(frame.gameId, userId),
           );
           break;
         case "draw":
-          void handleGameAction(connection, frame.gameId, (userId) =>
+          detachGameAction(connection, frame.gameId, (userId) =>
             gamesService.offerOrAcceptDraw(frame.gameId, userId),
           );
           break;
         case "drawCancel":
-          void handleGameAction(connection, frame.gameId, (userId) =>
+          detachGameAction(connection, frame.gameId, (userId) =>
             gamesService.clearDrawOffer(frame.gameId, userId),
           );
           break;
         case "flag":
           // Anyone may ask; the service decides whether the clock really fell.
-          void handleGameAction(connection, frame.gameId, () =>
+          detachGameAction(connection, frame.gameId, () =>
             gamesService.claimFlag(frame.gameId),
           );
           break;
         default:
-          void handleChallenge(connection, frame);
+          detach("challenge", () => handleChallenge(connection, frame));
       }
     });
 
@@ -638,7 +661,7 @@ wss.on(
     });
 
     ws.on("close", () => {
-      void unregister(connection);
+      detach("unregistering a connection", () => unregister(connection));
     });
 
     ws.on("error", (err) => {
@@ -663,7 +686,9 @@ setInterval(() => {
       connection.socket.ping();
     }
   }
-  void presence.heartbeat([...connections.keys()]);
+  detach("presence heartbeat", () =>
+    presence.heartbeat([...connections.keys()]),
+  );
 }, HEARTBEAT_MS).unref();
 
 async function main() {
@@ -675,4 +700,23 @@ async function main() {
   });
 }
 
-void main();
+/**
+ * A last line of defence. Everything above routes its own failures through
+ * `detach`, but a stray rejection anywhere else would otherwise end the
+ * process and disconnect every member. Log it and keep serving: a socket
+ * service that stays up with one broken operation is worth more to the club
+ * than one that exits cleanly.
+ */
+process.on("unhandledRejection", (reason) => {
+  console.error("[realtime] unhandled rejection", reason);
+});
+process.on("uncaughtException", (err) => {
+  console.error("[realtime] uncaught exception", err);
+});
+
+main().catch((err) => {
+  // Startup is different: without the presence reset and the re-armed
+  // watchdogs the service would be lying about who is online, so refuse to run.
+  console.error("[realtime] failed to start", err);
+  process.exit(1);
+});

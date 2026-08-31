@@ -15,7 +15,6 @@ import { hashToken } from "./tokens";
 export type SessionUser = {
   id: number;
   username: string;
-  displayName: string;
   role: string;
   familyId: number | null;
   familyName: string | null;
@@ -31,7 +30,6 @@ export async function findSessionUserByToken(
     .select({
       id: users.id,
       username: users.username,
-      displayName: users.displayName,
       role: users.role,
       familyId: users.familyId,
       familyName: families.name,

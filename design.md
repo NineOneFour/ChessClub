@@ -418,3 +418,36 @@ Not oversights — scope:
 - No `docker-compose`.
 - No test suite. The two smoke scripts run against the real database and are
   the current safety net.
+
+## 13. Names, and what is private
+
+Every member has two names. The **username** is the login handle and the
+public identity: it is what the roster, chat, the game rooms, member cards,
+challenges and the PGN all show. The **real name** is a private field.
+
+A real name is visible to exactly two audiences: the member themselves, and
+grown-ups in the same family. The predicate is `canSeeRealName()` in
+`lib/roles.ts`, kept in that leaf module for the same reason `isGrownUp()` is —
+a Client Component importing `lib/services/users.ts` would drag Postgres and
+argon2 into the browser bundle.
+
+**The administrator is not an exception**, which is the part that looks wrong
+until you know what it is protecting. Running the club means knowing which
+*family* is using it and being able to reset a parent's password, suspend a
+family or remove one. It does not mean managing other people's children, so
+there is no reason for the club secretary to learn what they are called. The
+administrator sees their own family's real names like any other parent, by
+being in it — not by being the administrator.
+
+Two consequences worth keeping:
+
+- **The wire protocol carries no real names at all.** `realtime/protocol.ts`
+  identifies members by username in every frame — presence, chat, players,
+  challenges, game cards. A socket that cannot send a real name cannot leak
+  one, which is cheaper to hold than a per-frame check.
+- **Passing a whole `Member` to a Client Component leaks it**, even when the
+  component never renders the field: React serialises the entire prop into the
+  RSC payload, where anyone can read it in view-source. This is not something
+  the typechecker will catch — the narrow prop type accepts the wide object
+  quite happily. `app/admin/page.tsx` had exactly this bug. Pass the fields,
+  not the record.

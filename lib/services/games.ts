@@ -23,10 +23,10 @@ import { fail } from "../validation";
  * much time is left.
  */
 
+/** Public by construction: a game is watchable by the whole club. */
 export type GamePlayer = {
   id: number;
   username: string;
-  displayName: string;
   avatar: string;
   role: string;
 };
@@ -89,14 +89,12 @@ export async function get(gameId: number): Promise<GameState | null> {
       whitePlayer: {
         id: sql<number>`w.id`,
         username: sql<string>`w.username`,
-        displayName: sql<string>`w.display_name`,
         avatar: sql<string>`w.avatar`,
         role: sql<string>`w.role`,
       },
       blackPlayer: {
         id: sql<number>`b.id`,
         username: sql<string>`b.username`,
-        displayName: sql<string>`b.display_name`,
         avatar: sql<string>`b.avatar`,
         role: sql<string>`b.role`,
       },
@@ -555,14 +553,12 @@ async function reload(tx: Tx, gameId: number, now: number): Promise<GameState> {
       whitePlayer: {
         id: sql<number>`w.id`,
         username: sql<string>`w.username`,
-        displayName: sql<string>`w.display_name`,
         avatar: sql<string>`w.avatar`,
         role: sql<string>`w.role`,
       },
       blackPlayer: {
         id: sql<number>`b.id`,
         username: sql<string>`b.username`,
-        displayName: sql<string>`b.display_name`,
         avatar: sql<string>`b.avatar`,
         role: sql<string>`b.role`,
       },
@@ -620,14 +616,12 @@ function summaryQuery() {
       whitePlayer: {
         id: sql<number>`w.id`,
         username: sql<string>`w.username`,
-        displayName: sql<string>`w.display_name`,
         avatar: sql<string>`w.avatar`,
         role: sql<string>`w.role`,
       },
       blackPlayer: {
         id: sql<number>`b.id`,
         username: sql<string>`b.username`,
-        displayName: sql<string>`b.display_name`,
         avatar: sql<string>`b.avatar`,
         role: sql<string>`b.role`,
       },
@@ -709,8 +703,8 @@ export async function toPgn(gameId: number): Promise<string | null> {
 
   return rules.toPgn({
     moves: state.moves.map((move) => move.uci),
-    white: state.white.displayName,
-    black: state.black.displayName,
+    white: state.white.username,
+    black: state.black.username,
     result: state.result,
     startedAt: state.startedAt,
     timeControl:

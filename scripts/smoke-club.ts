@@ -50,7 +50,7 @@ async function main() {
 
   const adminId = await usersService.create({
     username: `admin-${SUFFIX}`,
-    displayName: "Smoke Admin",
+    realName: "Smoke Admin",
     password: "smoke-password",
     role: "admin",
     familyId: null,
@@ -62,7 +62,7 @@ async function main() {
   await expectRejection("duplicate username refused", () =>
     usersService.create({
       username: `admin-${SUFFIX}`,
-      displayName: "Impostor",
+      realName: "Impostor",
       password: "smoke-password",
       role: "admin",
       familyId: null,
@@ -73,7 +73,7 @@ async function main() {
   await expectRejection("short password refused", () =>
     usersService.create({
       username: `short-${SUFFIX}`,
-      displayName: "Too Short",
+      realName: "Too Short",
       password: "abc",
       role: "parent",
       familyId: null,
@@ -109,7 +109,7 @@ async function main() {
     invitationsService.accept({
       token,
       username: `admin-${SUFFIX}`,
-      displayName: "Clashing Parent",
+      realName: "Clashing Parent",
       password: "smoke-password",
     }),
   );
@@ -121,7 +121,7 @@ async function main() {
   const parentId = await invitationsService.accept({
     token,
     username: `parent-${SUFFIX}`,
-    displayName: "Smoke Parent",
+    realName: "Smoke Parent",
     password: "smoke-password",
     email: "parent@example.test",
   });
@@ -139,7 +139,7 @@ async function main() {
     invitationsService.accept({
       token,
       username: `other-${SUFFIX}`,
-      displayName: "Second Comer",
+      realName: "Second Comer",
       password: "smoke-password",
     }),
   );
@@ -151,7 +151,7 @@ async function main() {
   for (const name of ["Ellie", "Max"]) {
     const id = await usersService.create({
       username: `${name.toLowerCase()}-${SUFFIX}`,
-      displayName: name,
+      realName: name,
       password: "smoke-password",
       role: "child",
       familyId,
@@ -244,7 +244,7 @@ async function main() {
   check("message posted", message.body === "anyone   up for a game?");
   check(
     "author details resolved",
-    message.displayName === "Ellie" && message.userId === kidIds[0],
+    message.username === `ellie-${SUFFIX}` && message.userId === kidIds[0],
   );
   check("a child's message carries the child role", message.role === "child");
 
@@ -379,7 +379,7 @@ async function main() {
 
   const secondAdminId = await usersService.create({
     username: `admin2-${SUFFIX}`,
-    displayName: "Second Admin",
+    realName: "Second Admin",
     password: "smoke-password",
     role: "admin",
     familyId: null,

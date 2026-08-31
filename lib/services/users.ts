@@ -18,7 +18,8 @@ import type { Role } from "../db/schema";
 export type Member = {
   id: number;
   username: string;
-  displayName: string;
+  /** Private — see canSeeRealName() in lib/roles.ts before rendering it. */
+  realName: string;
   role: string;
   familyId: number | null;
   familyName: string | null;
@@ -34,7 +35,7 @@ export type Member = {
 const memberColumns = {
   id: users.id,
   username: users.username,
-  displayName: users.displayName,
+  realName: users.realName,
   role: users.role,
   familyId: users.familyId,
   familyName: families.name,
@@ -124,7 +125,7 @@ export function listAll(): Promise<Member[]> {
     .select(memberColumns)
     .from(users)
     .leftJoin(families, eq(families.id, users.familyId))
-    .orderBy(asc(users.role), asc(users.displayName));
+    .orderBy(asc(users.role), asc(users.username));
 }
 
 /** The children a given parent manages (everyone else in their family). */
@@ -134,13 +135,13 @@ export function listChildrenOfFamily(familyId: number): Promise<Member[]> {
     .from(users)
     .leftJoin(families, eq(families.id, users.familyId))
     .where(and(eq(users.familyId, familyId), eq(users.role, "child")))
-    .orderBy(asc(users.displayName));
+    .orderBy(asc(users.realName));
 }
 
+/** The public shape of a member. Carries no real name by construction. */
 export type ClubMember = {
   id: number;
   username: string;
-  displayName: string;
   avatar: string;
   familyName: string | null;
   role: string;
@@ -160,7 +161,6 @@ export function listClubMembers(): Promise<ClubMember[]> {
     .select({
       id: users.id,
       username: users.username,
-      displayName: users.displayName,
       avatar: users.avatar,
       familyName: families.name,
       role: users.role,
@@ -170,7 +170,7 @@ export function listClubMembers(): Promise<ClubMember[]> {
     .leftJoin(families, eq(families.id, users.familyId))
     .leftJoin(presence, eq(presence.userId, users.id))
     .where(eq(users.isActive, true))
-    .orderBy(sql`${users.role} = 'child' desc`, asc(users.displayName));
+    .orderBy(sql`${users.role} = 'child' desc`, asc(users.username));
 }
 
 export async function createFamily(name: string): Promise<number> {
@@ -226,11 +226,11 @@ export function listFamilies(): Promise<{ id: number; name: string }[]> {
  */
 export async function assertCanCreate(input: {
   username: unknown;
-  displayName: unknown;
+  realName: unknown;
   password: unknown;
 }) {
   const username = normalizeUsername(input.username);
-  requireText(input.displayName, "Display name", { max: 40 });
+  requireText(input.realName, "Name", { max: 40 });
   validatePassword(input.password);
 
   const existing = await db
@@ -248,7 +248,7 @@ export async function assertCanCreate(input: {
  */
 export async function create(input: {
   username: unknown;
-  displayName: unknown;
+  realName: unknown;
   password: unknown;
   role: Role;
   familyId: number | null;
@@ -257,7 +257,7 @@ export async function create(input: {
   actorId: number | null;
 }): Promise<number> {
   const username = normalizeUsername(input.username);
-  const displayName = requireText(input.displayName, "Display name", { max: 40 });
+  const realName = requireText(input.realName, "Name", { max: 40 });
   const password = validatePassword(input.password);
   const email = input.role === "child" ? null : optionalEmail(input.email);
   const avatarRaw = String(input.avatar ?? "pawn");
@@ -274,7 +274,7 @@ export async function create(input: {
     .insert(users)
     .values({
       username,
-      displayName,
+      realName,
       passwordHash: await hashPassword(password),
       role: input.role,
       familyId: input.familyId,
@@ -297,15 +297,15 @@ export async function create(input: {
 /** Profile fields a member may change about themselves. */
 export async function updateProfile(
   userId: number,
-  input: { displayName: unknown; avatar: unknown },
+  input: { realName: unknown; avatar: unknown },
 ) {
-  const displayName = requireText(input.displayName, "Display name", { max: 40 });
+  const realName = requireText(input.realName, "Name", { max: 40 });
   const avatarRaw = String(input.avatar ?? "");
   if (!isAvatarKey(avatarRaw)) fail("Pick one of the available avatars.");
 
   await db
     .update(users)
-    .set({ displayName, avatar: avatarRaw })
+    .set({ realName, avatar: avatarRaw })
     .where(eq(users.id, userId));
 }
 

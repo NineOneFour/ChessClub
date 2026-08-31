@@ -53,9 +53,9 @@ export default async function AdminPage() {
                     <Avatar avatar={member.avatar} role={member.role} size="sm" />
                     <div>
                       <p className="text-sm font-semibold">
-                        {member.displayName}{" "}
+                        @{member.username}{" "}
                         <span className="font-mono text-[0.65rem] font-normal text-ink-soft">
-                          @{member.username} · {member.role}
+                          {member.role}
                           {member.familyName ? ` · ${member.familyName}` : ""}
                         </span>
                       </p>
@@ -71,7 +71,17 @@ export default async function AdminPage() {
                       </ul>
                     </div>
                   </div>
-                  <UserControls user={member} />
+                  {/* Only the fields the control needs. Passing the whole
+                      Member would serialise realName into the RSC payload,
+                      where the administrator is not entitled to see it. */}
+                  <UserControls
+                    user={{
+                      id: member.id,
+                      isActive: member.isActive,
+                      isMuted: member.isMuted,
+                      role: member.role,
+                    }}
+                  />
                 </div>
               ))}
             </div>
@@ -105,7 +115,7 @@ export default async function AdminPage() {
                       </time>
                       <div className="min-w-0">
                         <span className="text-sm font-semibold">
-                          {message.displayName}
+                          {message.username}
                         </span>
                         <p
                           className={`whitespace-pre-wrap break-words text-[0.95rem] leading-snug ${

@@ -42,7 +42,7 @@ export function listRecent(limit = 200): Promise<AuditEntry[]> {
       targetId: auditLog.targetId,
       detail: auditLog.detail,
       createdAt: auditLog.createdAt,
-      actorName: users.displayName,
+      actorName: users.username,
     })
     .from(auditLog)
     .leftJoin(users, eq(users.id, auditLog.actorId))

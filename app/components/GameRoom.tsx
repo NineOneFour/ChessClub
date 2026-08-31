@@ -173,7 +173,7 @@ export function GameRoom({
         {drawOfferedToMe && (
           <p className="mt-3 border-l-2 border-brass pl-3 text-sm">
             {(game.drawOfferBy === game.white.id ? game.white : game.black)
-              .displayName}{" "}
+              .username}{" "}
             is offering a draw.
           </p>
         )}
@@ -237,7 +237,7 @@ function PlayerBar({
         href={`/profile/${player.username}`}
         className="flex min-w-0 items-center gap-1.5"
       >
-        <span className="truncate font-semibold">{player.displayName}</span>
+        <span className="truncate font-semibold">{player.username}</span>
         <GrownUpTag role={player.role} />
       </Link>
       {isWinner && <span className="eyebrow text-brass">won</span>}
@@ -317,7 +317,7 @@ function Outcome({
 
   const headline = drawn
     ? `Drawn ${reason}`.trim()
-    : `${winner?.displayName} won ${reason}`.trim();
+    : `${winner?.username} won ${reason}`.trim();
 
   // A line for the players, and only for them.
   const personal =
@@ -420,7 +420,7 @@ function GameChat({
                     message.userId === viewerId ? "text-brass" : ""
                   }`}
                 >
-                  {message.displayName}
+                  {message.username}
                 </span>{" "}
                 <GrownUpTag role={message.role} />{" "}
                 <span className="break-words">{message.body}</span>

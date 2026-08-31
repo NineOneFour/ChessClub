@@ -6,10 +6,10 @@ import { AvatarPicker } from "./AvatarPicker";
 import { changeMyPassword, updateMyProfile } from "./actions";
 
 export function ProfileForm({
-  displayName,
+  realName,
   avatar,
 }: {
-  displayName: string;
+  realName: string;
   avatar: string;
 }) {
   const [state, action] = useActionState(updateMyProfile, undefined);
@@ -17,9 +17,10 @@ export function ProfileForm({
   return (
     <form action={action} className="sheet space-y-4 p-5">
       <Field
-        name="displayName"
-        label="Name"
-        defaultValue={displayName}
+        name="realName"
+        label="Your name"
+        hint="Only you and the grown-ups in your family see this."
+        defaultValue={realName}
         required
         maxLength={40}
       />

@@ -8,7 +8,7 @@ export type ChatMessage = {
   id: number;
   channel: string;
   userId: number;
-  displayName: string;
+  username: string;
   avatar: string;
   /** Carried so the transcript can tag grown-ups. See lib/roles.ts. */
   role: string;
@@ -20,7 +20,7 @@ const publicColumns = {
   id: chatMessages.id,
   channel: chatMessages.channel,
   userId: chatMessages.userId,
-  displayName: users.displayName,
+  username: users.username,
   avatar: users.avatar,
   role: users.role,
   body: chatMessages.body,
@@ -45,7 +45,7 @@ export async function post(input: {
 
   const author = await db
     .select({
-      displayName: users.displayName,
+      username: users.username,
       avatar: users.avatar,
       role: users.role,
     })
@@ -57,7 +57,7 @@ export async function post(input: {
     id: inserted[0].id,
     channel: input.channel,
     userId: input.userId,
-    displayName: author[0]?.displayName ?? "Someone",
+    username: author[0]?.username ?? "someone",
     avatar: author[0]?.avatar ?? "pawn",
     role: author[0]?.role ?? "child",
     body,

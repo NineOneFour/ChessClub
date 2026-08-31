@@ -94,7 +94,7 @@ export async function listAll(): Promise<Invitation[]> {
       createdAt: invitations.createdAt,
       expiresAt: invitations.expiresAt,
       acceptedAt: invitations.acceptedAt,
-      acceptedByName: users.displayName,
+      acceptedByName: users.username,
       revokedAt: invitations.revokedAt,
     })
     .from(invitations)
@@ -177,7 +177,7 @@ export async function findUsable(
 export async function accept(input: {
   token: string;
   username: unknown;
-  displayName: unknown;
+  realName: unknown;
   password: unknown;
   email?: unknown;
 }): Promise<number> {
@@ -185,7 +185,7 @@ export async function accept(input: {
   // burn a single-use invitation.
   await usersService.assertCanCreate({
     username: input.username,
-    displayName: input.displayName,
+    realName: input.realName,
     password: input.password,
   });
 
@@ -221,7 +221,7 @@ export async function accept(input: {
   try {
     userId = await usersService.create({
       username: input.username,
-      displayName: input.displayName,
+      realName: input.realName,
       password: input.password,
       role: "parent",
       familyId,
