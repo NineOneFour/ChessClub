@@ -200,7 +200,7 @@ export function Board({
     <div className="relative">
       <div
         ref={boardRef}
-        className="grid aspect-square w-full touch-none select-none grid-cols-8 border-2 border-ink"
+        className="grid aspect-square w-full touch-none select-none grid-cols-8 grid-rows-8 border-2 border-ink"
         role="grid"
         aria-label="Chess board"
       >
