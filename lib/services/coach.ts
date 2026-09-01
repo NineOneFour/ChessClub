@@ -57,7 +57,7 @@ export async function claimNextForCoaching(): Promise<CoachClaim | null> {
   const row = (rows as unknown as CandidateRow[])[0];
   if (!row) return null;
 
-  return row.white_summary === null
+  return row.white_summary == null
     ? { gameId: row.game_id, userId: row.white_id }
     : { gameId: row.game_id, userId: row.black_id };
 }

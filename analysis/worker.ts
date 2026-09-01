@@ -106,22 +106,34 @@ async function main() {
 
     if (gameId === null) {
       if (coachingEnabled) {
-        const claim = await coach.claimNextForCoaching();
-        if (claim !== null) {
-          try {
-            const summary = await generateCoachSummary(claim.gameId, claim.userId);
-            await coach.recordCoachSummary(claim.gameId, claim.userId, summary, groq.model());
-            console.log(
-              `[analysis] coach: game ${claim.gameId} player ${claim.userId} summarised`,
-            );
-          } catch (err) {
-            const message = err instanceof Error ? err.message : String(err);
-            await coach.recordCoachFailure(claim.gameId, claim.userId, message);
-            console.error(
-              `[analysis] coach: game ${claim.gameId} player ${claim.userId} failed: ${message}`,
-            );
+        try {
+          const claim = await coach.claimNextForCoaching();
+          if (claim !== null) {
+            try {
+              const summary = await generateCoachSummary(claim.gameId, claim.userId);
+              await coach.recordCoachSummary(claim.gameId, claim.userId, summary, groq.model());
+              console.log(
+                `[analysis] coach: game ${claim.gameId} player ${claim.userId} summarised`,
+              );
+              continue; // success — loop straight back to check for more work, no sleep
+            } catch (err) {
+              const message = err instanceof Error ? err.message : String(err);
+              await coach.recordCoachFailure(claim.gameId, claim.userId, message);
+              console.error(
+                `[analysis] coach: game ${claim.gameId} player ${claim.userId} failed: ${message}`,
+              );
+              // fall through to sleep below — a persistent failure (bad key,
+              // exhausted quota, a decommissioned model) must not spin at
+              // full speed against a paid third-party API
+            }
           }
-          continue;
+        } catch (err) {
+          // The claim itself failed (e.g. a missing migration, a transient
+          // DB error) — an isolated coaching hiccup must never escape this
+          // branch and crash the whole worker, Stockfish included.
+          const message = err instanceof Error ? err.message : String(err);
+          console.error(`[analysis] coach: claim failed: ${message}`);
+          // fall through to sleep below
         }
       }
 
