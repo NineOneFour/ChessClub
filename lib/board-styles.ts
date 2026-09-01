@@ -5,12 +5,13 @@
  * short menu gets a board that looks deliberate, and there is nothing to
  * upload, validate or host.
  *
- * Everything here is Unicode and CSS. No images, no licences, no assets to
- * ship, and it all scales with the board. The two Unicode chess families are
- * the whole range available — the solid glyphs (♚) and the hollow ones (♔) —
- * so a piece set is a choice of family plus how each colour is filled and
- * outlined. That is fewer sets than a site with sprite sheets, and every one of
- * them is legible at the size a phone will draw it.
+ * Most piece sets are Unicode and CSS — no images, no licences, no assets to
+ * ship, and they scale with the board. The two Unicode chess families are the
+ * whole range available — the solid glyphs (♚) and the hollow ones (♔) — so a
+ * glyph set is a choice of family plus how each colour is filled and outlined.
+ * A set may instead be `kind: "image"`, backed by files under
+ * `public/pieces/<key>/`, for a look Unicode can't produce — see
+ * `pieceVisual()`, the one place that knows how to draw either kind.
  *
  * A leaf module: pure data, no imports. `Board.tsx` is a Client Component and
  * the settings page renders previews, so both sides need it.
@@ -64,7 +65,8 @@ export const BOARD_STYLES: readonly BoardStyle[] = [
   },
 ] as const;
 
-export type PieceSet = {
+export type GlyphPieceSet = {
+  kind: "glyph";
   key: string;
   label: string;
   /**
@@ -86,8 +88,33 @@ export type PieceSet = {
   strokeWidth: string;
 };
 
+/**
+ * A set drawn from image files rather than Unicode — for a look the two
+ * built-in glyph families can't produce. Each piece carries its own colour
+ * baked in, so there is nothing here for `boardVars()` to hand the CSS.
+ */
+export type ImagePieceSet = {
+  kind: "image";
+  key: string;
+  label: string;
+  /** `public/pieces/<key>/<color>-<role>.png` — role is one of k q r b n p. */
+  path: (role: string, color: "white" | "black") => string;
+};
+
+export type PieceSet = GlyphPieceSet | ImagePieceSet;
+
+function imageSet(key: string, label: string): ImagePieceSet {
+  return {
+    kind: "image",
+    key,
+    label,
+    path: (role, color) => `/pieces/${key}/${color === "white" ? "w" : "b"}-${role}.png`,
+  };
+}
+
 export const PIECE_SETS: readonly PieceSet[] = [
   {
+    kind: "glyph",
     key: "scoresheet",
     label: "Score sheet",
     whiteFamily: "solid",
@@ -99,6 +126,7 @@ export const PIECE_SETS: readonly PieceSet[] = [
     strokeWidth: "1.4px",
   },
   {
+    kind: "glyph",
     key: "newsprint",
     label: "Newsprint",
     whiteFamily: "hollow",
@@ -110,6 +138,7 @@ export const PIECE_SETS: readonly PieceSet[] = [
     strokeWidth: "0.6px",
   },
   {
+    kind: "glyph",
     key: "woodcut",
     label: "Woodcut",
     whiteFamily: "solid",
@@ -121,6 +150,7 @@ export const PIECE_SETS: readonly PieceSet[] = [
     strokeWidth: "2.2px",
   },
   {
+    kind: "glyph",
     key: "brass",
     label: "Brass",
     whiteFamily: "solid",
@@ -131,6 +161,7 @@ export const PIECE_SETS: readonly PieceSet[] = [
     blackStroke: "#4a3410",
     strokeWidth: "1.8px",
   },
+  imageSet("illustrated", "Illustrated"),
 ] as const;
 
 /** Solid glyphs (♚): one family, used for either colour. */
@@ -173,14 +204,25 @@ export function isPieceSetKey(key: string): boolean {
   return PIECE_SETS.some((set) => set.key === key);
 }
 
-/** The glyph for one piece in one set. */
-export function glyph(
+/**
+ * How to draw one piece — the one place that knows a set might be glyph or
+ * image, so `Board.tsx`, `GameRoom.tsx`'s captured-pieces row and the
+ * settings-page preview don't each need to branch on `set.kind` themselves.
+ */
+export type PieceVisual =
+  | { kind: "glyph"; text: string }
+  | { kind: "image"; src: string };
+
+export function pieceVisual(
   set: PieceSet,
   role: string,
   color: "white" | "black",
-): string {
+): PieceVisual {
+  if (set.kind === "image") {
+    return { kind: "image", src: set.path(role, color) };
+  }
   const family = color === "white" ? set.whiteFamily : set.blackFamily;
-  return (family === "solid" ? SOLID : HOLLOW)[role] ?? "";
+  return { kind: "glyph", text: (family === "solid" ? SOLID : HOLLOW)[role] ?? "" };
 }
 
 /**
@@ -188,20 +230,24 @@ export function glyph(
  *
  * Returned as a plain object for `style={...}`, because Tailwind cannot
  * generate a class for a colour chosen at runtime — the squares and the glyphs
- * read these variables instead. See globals.css.
+ * read these variables instead. See globals.css. An image set has no colours
+ * of its own to hand over — each piece's colour is baked into its file.
  */
 export function boardVars(
   style: BoardStyle,
   set: PieceSet,
 ): React.CSSProperties {
-  return {
+  const vars: Record<string, string> = {
     "--sq-light": style.light,
     "--sq-dark": style.dark,
     "--sq-ink": style.ink,
-    "--piece-white-fill": set.whiteFill,
-    "--piece-white-stroke": set.whiteStroke,
-    "--piece-black-fill": set.blackFill,
-    "--piece-black-stroke": set.blackStroke,
-    "--piece-stroke-width": set.strokeWidth,
-  } as React.CSSProperties;
+  };
+  if (set.kind === "glyph") {
+    vars["--piece-white-fill"] = set.whiteFill;
+    vars["--piece-white-stroke"] = set.whiteStroke;
+    vars["--piece-black-fill"] = set.blackFill;
+    vars["--piece-black-stroke"] = set.blackStroke;
+    vars["--piece-stroke-width"] = set.strokeWidth;
+  }
+  return vars as React.CSSProperties;
 }

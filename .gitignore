@@ -42,3 +42,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# piece-set image assets: personal-use-licensed, so they aren't redistributed
+# through the (public) repo — deployed straight to the server instead. The
+# code that references them ships normally.
+/public/pieces/
+
+# raw downloaded asset archives — working material, never committed
+/peices/

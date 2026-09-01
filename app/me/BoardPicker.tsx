@@ -4,8 +4,8 @@ import { useState } from "react";
 import {
   BOARD_STYLES,
   boardVars,
-  glyph,
   PIECE_SETS,
+  pieceVisual,
   boardStyle as resolveStyle,
   pieceSet as resolveSet,
 } from "@/lib/board-styles";
@@ -13,8 +13,8 @@ import {
 /**
  * The board and the pieces, chosen by looking at them.
  *
- * Each option is a real four-square board with real pieces on it, drawn by the
- * same glyphs and the same custom properties the game uses, so what a child
+ * Each option is a real four-square board with real pieces on it, drawn the
+ * same way the game itself draws them (see `pieceVisual()`), so what a child
  * picks is what they get. A list of names would make somebody guess what
  * "Newsprint" looks like, and then find out in the middle of a game.
  *
@@ -125,15 +125,22 @@ function Swatch({
             square.dark ? "bg-[var(--sq-dark)]" : "bg-[var(--sq-light)]"
           }`}
         >
-          {square.piece && (
-            <span
-              className={`piece-glyph text-[1.35rem] leading-none ${
-                square.piece.color === "white" ? "piece-white" : "piece-black"
-              }`}
-            >
-              {glyph(set, square.piece.role, square.piece.color)}
-            </span>
-          )}
+          {square.piece &&
+            (() => {
+              const piece = square.piece!;
+              const visual = pieceVisual(set, piece.role, piece.color);
+              return visual.kind === "image" ? (
+                <img src={visual.src} alt="" className="h-8 w-8 object-contain" />
+              ) : (
+                <span
+                  className={`piece-glyph text-[1.35rem] leading-none ${
+                    piece.color === "white" ? "piece-white" : "piece-black"
+                  }`}
+                >
+                  {visual.text}
+                </span>
+              );
+            })()}
         </span>
       ))}
     </span>

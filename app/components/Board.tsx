@@ -4,8 +4,8 @@ import { useRef, useState } from "react";
 import {
   boardStyle,
   boardVars,
-  glyph,
   pieceSet,
+  pieceVisual,
   type PieceSet,
 } from "@/lib/board-styles";
 
@@ -271,19 +271,31 @@ export function Board({
                 <span className="pointer-events-none absolute inset-[6%] rounded-full border-[3px] border-[var(--sq-ink)] opacity-35" />
               )}
 
-              {piece && (
-                <span
-                  aria-hidden
-                  className={[
-                    "piece-glyph pointer-events-none relative leading-none",
-                    "text-[min(9vw,3.2rem)] sm:text-[min(6vw,3.4rem)]",
-                    piece.color === "white" ? "piece-white" : "piece-black",
-                    dragging === square ? "opacity-40" : "",
-                  ].join(" ")}
-                >
-                  {glyph(set, piece.role, piece.color)}
-                </span>
-              )}
+              {piece &&
+                (() => {
+                  const visual = pieceVisual(set, piece.role, piece.color);
+                  const faded = dragging === square ? "opacity-40" : "";
+                  return visual.kind === "image" ? (
+                    <img
+                      src={visual.src}
+                      alt=""
+                      draggable={false}
+                      className={`pointer-events-none relative h-[78%] w-[78%] object-contain ${faded}`}
+                    />
+                  ) : (
+                    <span
+                      aria-hidden
+                      className={[
+                        "piece-glyph pointer-events-none relative leading-none",
+                        "text-[min(9vw,3.2rem)] sm:text-[min(6vw,3.4rem)]",
+                        piece.color === "white" ? "piece-white" : "piece-black",
+                        faded,
+                      ].join(" ")}
+                    >
+                      {visual.text}
+                    </span>
+                  );
+                })()}
             </div>
           );
         })}
@@ -330,21 +342,28 @@ function PromotionPicker({
         className="sheet flex gap-1 p-2"
         onClick={(event) => event.stopPropagation()}
       >
-        {PROMOTION_CHOICES.map((role) => (
-          <button
-            key={role}
-            type="button"
-            onClick={() => onPick(role)}
-            aria-label={`Promote to ${PIECE_NAMES[role]}`}
-            className={`grid h-14 w-14 place-items-center rounded-sm border border-rule bg-white text-4xl leading-none hover:border-ink ${
-              color === "white" ? "piece-white" : "piece-black"
-            }`}
-          >
-            <span aria-hidden className="piece-glyph">
-              {glyph(set, role, color)}
-            </span>
-          </button>
-        ))}
+        {PROMOTION_CHOICES.map((role) => {
+          const visual = pieceVisual(set, role, color);
+          return (
+            <button
+              key={role}
+              type="button"
+              onClick={() => onPick(role)}
+              aria-label={`Promote to ${PIECE_NAMES[role]}`}
+              className={`grid h-14 w-14 place-items-center rounded-sm border border-rule bg-white text-4xl leading-none hover:border-ink ${
+                color === "white" ? "piece-white" : "piece-black"
+              }`}
+            >
+              {visual.kind === "image" ? (
+                <img src={visual.src} alt="" className="h-10 w-10 object-contain" />
+              ) : (
+                <span aria-hidden className="piece-glyph">
+                  {visual.text}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
     </div>
   );

@@ -15,8 +15,8 @@ import { STARTING_FEN } from "@/lib/chess/position";
 import {
   boardStyle as resolveBoardStyle,
   boardVars,
-  glyph,
   pieceSet as resolvePieceSet,
+  pieceVisual,
 } from "@/lib/board-styles";
 import type { MoveQuality } from "@/lib/db/schema";
 import type { GameAnalysis } from "@/lib/services/analysis";
@@ -484,7 +484,10 @@ function CapturedRow({
     >
       {sortByValue(captured).map((letter, i) => {
         const color = letter === letter.toLowerCase() ? "black" : "white";
-        return (
+        const visual = pieceVisual(set, letter.toLowerCase(), color);
+        return visual.kind === "image" ? (
+          <img key={i} src={visual.src} alt="" className="h-5 w-5 object-contain" />
+        ) : (
           <span
             key={i}
             aria-hidden
@@ -492,7 +495,7 @@ function CapturedRow({
               color === "white" ? "piece-white" : "piece-black"
             }`}
           >
-            {glyph(set, letter.toLowerCase(), color)}
+            {visual.text}
           </span>
         );
       })}
