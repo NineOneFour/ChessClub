@@ -4,8 +4,8 @@ import Groq from "groq-sdk";
  * The one place that knows how to talk to Groq. `lib/llm/coach.ts` builds
  * what to say; this module only sends it. A second provider later is a
  * second module with the same three exports, swapped in at the one call
- * site in lib/services/coach.ts's caller (analysis/worker.ts) — there is no
- * registry to extend because there is nothing to register yet.
+ * site in `lib/llm/coach.ts` — there is no registry to extend because there
+ * is nothing to register yet.
  */
 
 // llama-3.3-70b-versatile (the original plan's choice) was decommissioned by Groq;

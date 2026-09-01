@@ -14,6 +14,11 @@ import { complete } from "./groq";
  */
 
 const WORST_MOVES = 3;
+// This codebase's own "good" threshold (lib/chess/evaluation.ts's
+// classifyLoss) — below this a move isn't a genuine mistake, and describing
+// it to the LLM as "costly" invites it to invent a plausible-sounding reason
+// for a move that wasn't actually wrong.
+const MIN_NOTABLE_LOSS_CP = 50;
 const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
 export const COACH_SYSTEM_PROMPT = `
@@ -66,6 +71,7 @@ async function worstMoves(gameId: number, isWhite: boolean): Promise<WorstMove[]
 
   return rows
     .filter((r) => r.ply % 2 === 1 === isWhite)
+    .filter((r) => r.lossCp > MIN_NOTABLE_LOSS_CP)
     .sort((a, b) => b.lossCp - a.lossCp)
     .slice(0, WORST_MOVES)
     .map((r) => ({
@@ -84,8 +90,6 @@ function buildPrompt(input: {
   worst: WorstMove[];
 }): string {
   const { state, isWhite, performance, worst } = input;
-  const you = isWhite ? state.white.username : state.black.username;
-  const opponent = isWhite ? state.black.username : state.white.username;
   const myId = isWhite ? state.white.id : state.black.id;
 
   const outcome =
@@ -102,16 +106,16 @@ function buildPrompt(input: {
           .map(
             (m, i) =>
               `${i + 1}. Move ${Math.ceil(m.ply / 2)} (${m.san}) cost about ` +
-              `${Math.round(m.lossCp / 100)} pawns of advantage.\n` +
+              `${(m.lossCp / 100).toFixed(1)} pawns of advantage.\n` +
               `   Position before this move (FEN): ${m.fenBefore}\n` +
               `   Position after this move (FEN): ${m.fenAfter}`,
           )
           .join("\n");
 
   return `
-You are writing a coaching summary for ${you}, who just finished a chess game.
+You are writing a coaching summary for the player who just finished a chess game.
 
-Result: ${outcome}, by ${state.resultReason ?? "unknown reason"}, against ${opponent}.
+Result: ${outcome}, by ${state.resultReason ?? "unknown reason"}, against your opponent.
 
 Performance this game, already computed by the chess engine — trust these numbers exactly:
 - Estimated playing level this game: ${performance.rating ?? "not enough moves to estimate"}
@@ -122,10 +126,10 @@ Performance this game, already computed by the chess engine — trust these numb
 - Inaccuracies: ${performance.inaccuracies}
 - Share of moves matching the engine's own top choice: ${Math.round(performance.bestShare * 100)}%
 
-The costliest moves ${you} made this game:
+The costliest moves you made this game:
 ${worstText}
 
-Write the coaching summary for ${you} now, following the system instructions.
+Write the coaching summary now, speaking directly to the player as "you", following the system instructions.
 `.trim();
 }
 
