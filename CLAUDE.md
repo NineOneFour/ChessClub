@@ -234,6 +234,7 @@ npm run smoke:realtime   # the socket, end to end (needs the service running)
 npm run smoke:chess      # rules, clocks, challenges, offers, games, PGN
 npm run smoke:play       # a whole game over the socket, with a spectator
 npm run smoke:analysis   # evaluation maths, the queue, and the engine
+npm run smoke:coach      # the coaching queue, storage, and (if GROQ_API_KEY is set) a real Groq call
 npx tsx scripts/dev-fixture.ts   # two families, four kids, a conversation
 ```
 
