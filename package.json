@@ -23,7 +23,8 @@
     "smoke:realtime": "tsx scripts/smoke-realtime.ts",
     "smoke:chess": "tsx scripts/smoke-chess.ts",
     "smoke:play": "tsx scripts/smoke-play.ts",
-    "smoke:analysis": "tsx scripts/smoke-analysis.ts"
+    "smoke:analysis": "tsx scripts/smoke-analysis.ts",
+    "smoke:coach": "tsx scripts/smoke-coach.ts"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.1.0",
