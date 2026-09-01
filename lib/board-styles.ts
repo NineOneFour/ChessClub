@@ -70,15 +70,19 @@ export type GlyphPieceSet = {
   key: string;
   label: string;
   /**
-   * Which Unicode family draws each colour. "solid" is ♚, "hollow" is ♔.
+   * Which glyph family draws each colour. "solid" is ♚, "hollow" is ♔,
+   * "letters" is 𝗞 — old-school algebraic notation letters, drawn from
+   * Unicode's Mathematical Sans-Serif Bold block rather than plain ASCII so
+   * they're bold and blocky in any font, the same trick as "bold" text
+   * elsewhere on the web.
    *
    * Using the solid family for both colours and filling white white is the
    * default because it reads better small than the hollow glyphs, whose thin
    * strokes disappear on a phone. The newsprint set uses the hollow family for
    * white on purpose: it is the newspaper diagram, and it looks like one.
    */
-  whiteFamily: "solid" | "hollow";
-  blackFamily: "solid" | "hollow";
+  whiteFamily: "solid" | "hollow" | "letters";
+  blackFamily: "solid" | "hollow" | "letters";
   /** Fill and outline per colour, as CSS colours. */
   whiteFill: string;
   whiteStroke: string;
@@ -161,6 +165,18 @@ export const PIECE_SETS: readonly PieceSet[] = [
     blackStroke: "#4a3410",
     strokeWidth: "1.8px",
   },
+  {
+    kind: "glyph",
+    key: "letters",
+    label: "Letters",
+    whiteFamily: "letters",
+    blackFamily: "letters",
+    whiteFill: "#ffffff",
+    whiteStroke: "#191c34",
+    blackFill: "#191c34",
+    blackStroke: "#191c34",
+    strokeWidth: "1.6px",
+  },
   imageSet("illustrated", "Illustrated"),
 ] as const;
 
@@ -182,6 +198,27 @@ const HOLLOW: Record<string, string> = {
   b: "♗",
   n: "♘",
   p: "♙",
+};
+
+/**
+ * Old-school algebraic-notation letters (𝗞), one per role — no case
+ * distinction between colours; that comes from fill/stroke like every other
+ * glyph family. Mathematical Sans-Serif Bold, not plain ASCII, so they come
+ * out bold and blocky without needing a font-weight of their own.
+ */
+const LETTERS: Record<string, string> = {
+  k: "𝗞",
+  q: "𝗤",
+  r: "𝗥",
+  b: "𝗕",
+  n: "𝗡",
+  p: "𝗣",
+};
+
+const GLYPH_FAMILIES: Record<"solid" | "hollow" | "letters", Record<string, string>> = {
+  solid: SOLID,
+  hollow: HOLLOW,
+  letters: LETTERS,
 };
 
 export const DEFAULT_BOARD_STYLE = BOARD_STYLES[0].key;
@@ -222,7 +259,7 @@ export function pieceVisual(
     return { kind: "image", src: set.path(role, color) };
   }
   const family = color === "white" ? set.whiteFamily : set.blackFamily;
-  return { kind: "glyph", text: (family === "solid" ? SOLID : HOLLOW)[role] ?? "" };
+  return { kind: "glyph", text: GLYPH_FAMILIES[family][role] ?? "" };
 }
 
 /**
