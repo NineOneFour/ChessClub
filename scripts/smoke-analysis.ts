@@ -87,7 +87,10 @@ async function main() {
   check("an ordinary loss is the difference", evaluation.lossCp(50, -100) === 150);
   check("a loss is never negative", evaluation.lossCp(-100, 50) === 0);
 
-  check("nothing lost is best", evaluation.classifyLoss(0) === "best");
+  check(
+    "nothing lost is good, not best — best is reserved for matching the engine's own move",
+    evaluation.classifyLoss(0) === "good",
+  );
   check("a little is good", evaluation.classifyLoss(40) === "good");
   check("more is an inaccuracy", evaluation.classifyLoss(80) === "inaccuracy");
   check("more still is a mistake", evaluation.classifyLoss(150) === "mistake");

@@ -80,12 +80,17 @@ export function lossCp(bestCp: number, playedCp: number): number {
  * chess. `blunder` starts at two pawns because that is roughly "you gave
  * something away" — the thing a child can see for themselves once it is pointed
  * out.
+ *
+ * `best` isn't on this ladder: it is reserved for actually matching the
+ * engine's own choice (see `analyseMove`), not merely landing within a few
+ * centipawns of it. A ladder tier here would mark every move in a quiet,
+ * near-equal position "best", which waters the label down to meaninglessness
+ * — a near-optimal move that wasn't the engine's pick is just `good`.
  */
 export const QUALITY_THRESHOLDS: readonly {
   quality: MoveQuality;
   upTo: number;
 }[] = [
-  { quality: "best", upTo: 10 },
   { quality: "good", upTo: 50 },
   { quality: "inaccuracy", upTo: 100 },
   { quality: "mistake", upTo: 200 },
