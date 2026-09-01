@@ -14,6 +14,7 @@ import * as analysisService from "../lib/services/analysis";
 import * as coachService from "../lib/services/coach";
 import * as gamesService from "../lib/services/games";
 import * as usersService from "../lib/services/users";
+import * as groq from "../lib/llm/groq";
 
 /**
  * Phase 4's first slice, end to end: the coaching queue and storage always;
@@ -137,9 +138,18 @@ async function main() {
   );
 
   console.log("Groq itself");
-  skip(
-    "the Groq client checks — added in Task 3",
-  );
+  if (!groq.isConfigured()) {
+    skip(
+      "the Groq client checks: GROQ_API_KEY is not set. Add it to .env to test a real call.",
+    );
+  } else {
+    const reply = await groq.complete(
+      "You reply with exactly the word 'pong', nothing else.",
+      "ping",
+    );
+    check("Groq returned some text", reply.length > 0);
+    console.log(`      (model ${groq.model()}, replied: ${JSON.stringify(reply)})`);
+  }
 }
 
 /** Whether calling claimNextForCoaching would currently return our game. */
