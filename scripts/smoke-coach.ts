@@ -147,7 +147,7 @@ async function main() {
       "You reply with exactly the word 'pong', nothing else.",
       "ping",
     );
-    check("Groq returned some text", reply.length > 0);
+    check("Groq replied with pong", reply.toLowerCase().includes("pong"));
     console.log(`      (model ${groq.model()}, replied: ${JSON.stringify(reply)})`);
   }
 }

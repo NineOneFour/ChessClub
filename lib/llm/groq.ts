@@ -8,6 +8,8 @@ import Groq from "groq-sdk";
  * registry to extend because there is nothing to register yet.
  */
 
+// llama-3.3-70b-versatile (the original plan's choice) was decommissioned by Groq;
+// this is the closest available analog — Groq's largest current general-purpose model.
 const DEFAULT_MODEL = "openai/gpt-oss-120b";
 
 let cachedClient: Groq | null = null;
