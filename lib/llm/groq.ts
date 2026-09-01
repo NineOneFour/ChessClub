@@ -8,7 +8,7 @@ import Groq from "groq-sdk";
  * registry to extend because there is nothing to register yet.
  */
 
-const DEFAULT_MODEL = "qwen/qwen3.8-27b";
+const DEFAULT_MODEL = "openai/gpt-oss-120b";
 
 let cachedClient: Groq | null = null;
 
