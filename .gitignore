@@ -50,3 +50,6 @@ next-env.d.ts
 
 # raw downloaded asset archives — working material, never committed
 /peices/
+
+# isolated git worktrees for in-progress feature branches
+/.worktrees/
