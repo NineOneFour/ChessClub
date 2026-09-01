@@ -50,6 +50,13 @@
       "when": 1788221998999,
       "tag": "0006_productive_black_widow",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1788291896602,
+      "tag": "0007_same_sprite",
+      "breakpoints": true
     }
   ]
 }
