@@ -15,6 +15,9 @@ import * as coachService from "../lib/services/coach";
 import * as gamesService from "../lib/services/games";
 import * as usersService from "../lib/services/users";
 import * as groq from "../lib/llm/groq";
+import * as rules from "../lib/chess/rules";
+import { generateCoachSummary } from "../lib/llm/coach";
+import { performanceIn } from "../lib/services/ratings";
 
 /**
  * Phase 4's first slice, end to end: the coaching queue and storage always;
@@ -150,6 +153,108 @@ async function main() {
     check("Groq replied with pong", reply.toLowerCase().includes("pong"));
     console.log(`      (model ${groq.model()}, replied: ${JSON.stringify(reply)})`);
   }
+
+  console.log("End to end: a real coaching summary");
+
+  const longGame = longLegalGame(30);
+  const rated = await gamesService.create({
+    whiteId: white,
+    blackId: black,
+    initialMs: 0,
+    incrementMs: 0,
+  });
+  created.gameIds.push(rated);
+
+  for (const [index, uci] of longGame.entries()) {
+    const mover = index % 2 === 0 ? white : black;
+    const outcome = await gamesService.playMove(rated, mover, {
+      from: uci.slice(0, 2),
+      to: uci.slice(2, 4),
+      ...(uci.length > 4 ? { promotion: uci.slice(4) } : {}),
+    });
+    if (!outcome.ok) throw new Error(`FAILED: move ${uci} rejected`);
+  }
+  await gamesService.resign(rated, black);
+
+  // White plays cleanly; black has one clear blunder at move 8 (ply 16, a
+  // move black actually played) so worstMoves has something real to surface.
+  await analysisService.recordSuccess(rated, {
+    engine: "Test engine",
+    depth: 8,
+    moves: longGame.map((uci, index) => {
+      const isWhiteMove = index % 2 === 0;
+      const ply = index + 1;
+      const isBlackBlunder = ply === 16;
+      return {
+        ply,
+        evalBeforeCp: 0,
+        evalAfterCp: isBlackBlunder ? -450 : 0,
+        lossCp: isBlackBlunder ? 450 : isWhiteMove ? 10 : 60,
+        bestUci: isWhiteMove ? uci : "a7a6",
+        quality: isBlackBlunder ? "blunder" : isWhiteMove ? "best" : "inaccuracy",
+        mateBefore: null,
+        mateAfter: null,
+      };
+    }),
+  });
+
+  const whitePerf = await performanceIn(rated, white);
+  check("white's performance is ratable", whitePerf?.rating !== null);
+
+  if (!groq.isConfigured()) {
+    skip("end-to-end summary generation: GROQ_API_KEY is not set.");
+  } else {
+    const whiteSummary = await generateCoachSummary(rated, white);
+    check("a summary was generated for white", whiteSummary.length > 20);
+    console.log(`      white: ${whiteSummary}`);
+
+    const blackSummary = await generateCoachSummary(rated, black);
+    check("a summary was generated for black", blackSummary.length > 20);
+    console.log(`      black: ${blackSummary}`);
+
+    await coachService.recordCoachSummary(rated, white, whiteSummary, groq.model());
+    await coachService.recordCoachSummary(rated, black, blackSummary, groq.model());
+    check(
+      "both summaries read back",
+      (await coachService.summaryFor(rated, white)) === whiteSummary &&
+        (await coachService.summaryFor(rated, black)) === blackSummary,
+    );
+  }
+}
+
+/**
+ * A deterministic legal game of `plies` half-moves that has not ended.
+ * Copied from scripts/smoke-analysis.ts's helper of the same name — kept
+ * local rather than shared, matching this project's one-file-per-suite
+ * smoke script convention.
+ */
+function longLegalGame(plies: number): string[] {
+  for (let seed = 1; seed < 500; seed += 1) {
+    let state = seed;
+    const next = () => (state = (state * 1103515245 + 12345) & 0x7fffffff);
+
+    const moves: string[] = [];
+    let usable = true;
+
+    for (let ply = 0; ply < plies; ply += 1) {
+      const position = rules.positionAfter(moves);
+      if (position.ending) {
+        usable = false;
+        break;
+      }
+      const options = Object.entries(position.dests).flatMap(([from, tos]) =>
+        tos.map((to) => `${from}${to}`),
+      );
+      if (options.length === 0) {
+        usable = false;
+        break;
+      }
+      moves.push(options[next() % options.length]);
+    }
+
+    if (usable && !rules.positionAfter(moves).ending) return moves;
+  }
+  throw new Error("could not generate a long legal game");
 }
 
 /** Whether calling claimNextForCoaching would currently return our game. */
