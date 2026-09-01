@@ -18,6 +18,8 @@ import {
   glyph,
   pieceSet as resolvePieceSet,
 } from "@/lib/board-styles";
+import type { MoveQuality } from "@/lib/db/schema";
+import type { GameAnalysis } from "@/lib/services/analysis";
 import { MAX_CHAT_LENGTH } from "@/lib/validation";
 import { Avatar, GrownUpTag } from "./Avatar";
 import { Board } from "./Board";
@@ -39,6 +41,7 @@ export function GameRoom({
   canChat,
   chatBlockedReason,
   performance,
+  analysis,
   boardStyle,
   pieceSet,
 }: {
@@ -54,6 +57,11 @@ export function GameRoom({
    * reached yet.
    */
   performance: GamePerformance | null;
+  /**
+   * Per-move quality for the score sheet. Unlike `performance`, not limited
+   * to the two players — anyone reviewing a finished, analysed game sees it.
+   */
+  analysis: GameAnalysis | null;
   /** The viewer's own board and pieces. Null falls back to the default. */
   boardStyle: string | null;
   pieceSet: string | null;
@@ -196,6 +204,10 @@ export function GameRoom({
   useEffect(() => {
     flagAskedRef.current = false;
   }, [game.ply, game.status]);
+
+  const qualityByPly = new Map(
+    analysis?.moves.map((move) => [move.ply, move.quality]) ?? [],
+  );
 
   const drawOfferedToMe =
     game.status === "active" &&
@@ -369,6 +381,7 @@ export function GameRoom({
             moves={game.moves}
             at={at}
             onStep={reviewable ? step : null}
+            qualityByPly={qualityByPly}
           />
         </div>
 
@@ -623,15 +636,39 @@ function positionAt(game: WireGame, ply: number | null) {
  * `onStep` is null while it is still being played, and the sheet is then a
  * plain list that follows along.
  */
+/**
+ * The classic scoresheet annotation for a graded move — `!` for the engine's
+ * own choice, `?!`/`?`/`??` with rising alarm for the rest. `good`, the
+ * ordinary/unremarkable bucket, and an unanalysed move both get no mark:
+ * flagging every move would bury the ones actually worth a child's
+ * attention.
+ */
+const QUALITY_MARK: Partial<Record<MoveQuality, { symbol: string; className: string }>> = {
+  best: { symbol: "!", className: "text-live" },
+  inaccuracy: { symbol: "?!", className: "text-brass" },
+  mistake: { symbol: "?", className: "text-stamp" },
+  blunder: { symbol: "??", className: "text-stamp font-bold" },
+};
+
+const QUALITY_LABEL: Partial<Record<MoveQuality, string>> = {
+  best: "The engine's own choice",
+  inaccuracy: "Inaccuracy",
+  mistake: "Mistake",
+  blunder: "Blunder",
+};
+
 function ScoreSheet({
   moves,
   at,
   onStep,
+  qualityByPly,
 }: {
   moves: WireGame["moves"];
   /** Half-move on the board, or null when the board is showing the live game. */
   at: number | null;
   onStep: ((to: number | "first" | "back" | "on" | "last") => void) | null;
+  /** Per-move grading, keyed by ply. Empty when the game isn't analysed yet. */
+  qualityByPly: Map<number, MoveQuality>;
 }) {
   const endRef = useRef<HTMLDivElement>(null);
   const activeRef = useRef<HTMLButtonElement>(null);
@@ -667,9 +704,27 @@ function ScoreSheet({
     if (!move) return <span className="w-16" />;
 
     const active = move.ply === at;
+    const quality = qualityByPly.get(move.ply);
+    const mark = quality ? QUALITY_MARK[quality] : undefined;
+    const label = quality ? QUALITY_LABEL[quality] : undefined;
+
+    const content = (
+      <>
+        {move.san}
+        {mark && (
+          <span className={mark.className} aria-hidden>
+            {mark.symbol}
+          </span>
+        )}
+      </>
+    );
 
     if (!onStep) {
-      return <span className="w-16 font-mono text-sm">{move.san}</span>;
+      return (
+        <span className="w-16 font-mono text-sm" title={label}>
+          {content}
+        </span>
+      );
     }
 
     return (
@@ -677,18 +732,35 @@ function ScoreSheet({
         ref={active ? activeRef : null}
         type="button"
         aria-current={active ? "true" : undefined}
+        title={label}
         className={`w-16 text-left font-mono text-sm ${
           active ? "bg-ink px-1 text-sheet" : "px-1 hover:bg-paper"
         }`}
         onClick={() => onStep(move.ply)}
       >
-        {move.san}
+        {content}
       </button>
     );
   };
 
   return (
     <>
+      {qualityByPly.size > 0 && (
+        <p className="mb-2 flex flex-wrap gap-x-3 gap-y-1 font-mono text-xs text-ink-soft">
+          <span>
+            <span className="text-live">!</span> best
+          </span>
+          <span>
+            <span className="text-brass">?!</span> inaccuracy
+          </span>
+          <span>
+            <span className="text-stamp">?</span> mistake
+          </span>
+          <span>
+            <span className="text-stamp font-bold">??</span> blunder
+          </span>
+        </p>
+      )}
       <div className="sheet ruled max-h-[22rem] overflow-y-auto">
         {pairs.map((pair) => (
           <div key={pair.number} className="flex items-center gap-3 px-3 py-1">
