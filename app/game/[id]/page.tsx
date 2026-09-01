@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth/guards";
 import * as analysisService from "@/lib/services/analysis";
 import * as chat from "@/lib/services/chat";
+import * as coach from "@/lib/services/coach";
 import * as games from "@/lib/services/games";
 import * as ratings from "@/lib/services/ratings";
 import * as users from "@/lib/services/users";
@@ -25,19 +26,23 @@ export default async function GamePage({ params }: PageProps<"/game/[id]">) {
   const gameId = Number(id);
   if (!Number.isInteger(gameId)) notFound();
 
-  const [state, messages, viewer, performance, analysis] = await Promise.all([
-    games.get(gameId),
-    chat.listVisible(gameChannel(gameId), 100),
-    // For the board and the pieces: everybody sits at their own board.
-    users.getById(me.id),
-    // Null unless the viewer played in it and it has been analysed. Stockfish's
-    // opinion is never available during a live game — see design.md §17.
-    ratings.performanceIn(gameId, me.id),
-    // Per-move quality (best/good/inaccuracy/mistake/blunder) for the score
-    // sheet — unlike performanceIn, open to anyone reviewing a finished game,
-    // not just the two players. Also null during a live game.
-    analysisService.forGame(gameId),
-  ]);
+  const [state, messages, viewer, performance, analysis, coachSummary] =
+    await Promise.all([
+      games.get(gameId),
+      chat.listVisible(gameChannel(gameId), 100),
+      // For the board and the pieces: everybody sits at their own board.
+      users.getById(me.id),
+      // Null unless the viewer played in it and it has been analysed. Stockfish's
+      // opinion is never available during a live game — see design.md §17.
+      ratings.performanceIn(gameId, me.id),
+      // Per-move quality (best/good/inaccuracy/mistake/blunder) for the score
+      // sheet — unlike performanceIn, open to anyone reviewing a finished game,
+      // not just the two players. Also null during a live game.
+      analysisService.forGame(gameId),
+      // The LLM coaching summary, same visibility as performance: only the
+      // viewer's own text, only once Stockfish and Groq have both finished.
+      coach.summaryFor(gameId, me.id),
+    ]);
   if (!state) notFound();
 
   const speak = chat.canSpeak(me, gameChannel(gameId));
@@ -60,6 +65,7 @@ export default async function GamePage({ params }: PageProps<"/game/[id]">) {
         canChat={speak.ok}
         performance={performance}
         analysis={analysis}
+        coachSummary={coachSummary}
         boardStyle={viewer?.boardStyle ?? null}
         pieceSet={viewer?.pieceSet ?? null}
         chatBlockedReason={speak.ok ? null : speak.reason}

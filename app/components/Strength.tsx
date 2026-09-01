@@ -98,3 +98,18 @@ export function PerformanceLine({
     </div>
   );
 }
+
+/**
+ * The AI coach's plain-language take on this player's own game — Groq's
+ * explanation of what the numbers above mean, not a second opinion on them.
+ * Shown only once it exists; a game can be fully analysed with no coaching
+ * text yet (Groq unconfigured, or not yet its turn in the worker's queue).
+ */
+export function CoachSummaryLine({ text }: { text: string }) {
+  return (
+    <div className="mt-3 border-l-2 border-rule pl-3 text-sm">
+      <p className="eyebrow text-xs">Coach</p>
+      <p className="mt-1 text-ink-soft">{text}</p>
+    </div>
+  );
+}

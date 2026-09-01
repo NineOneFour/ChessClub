@@ -23,7 +23,7 @@ import type { GameAnalysis } from "@/lib/services/analysis";
 import { MAX_CHAT_LENGTH } from "@/lib/validation";
 import { Avatar, GrownUpTag } from "./Avatar";
 import { Board } from "./Board";
-import { PerformanceLine } from "./Strength";
+import { CoachSummaryLine, PerformanceLine } from "./Strength";
 import { SectionHeading } from "./SectionHeading";
 import { useGameSocket, useLiveClock } from "./useGameSocket";
 
@@ -42,6 +42,7 @@ export function GameRoom({
   chatBlockedReason,
   performance,
   analysis,
+  coachSummary,
   boardStyle,
   pieceSet,
 }: {
@@ -62,6 +63,13 @@ export function GameRoom({
    * to the two players — anyone reviewing a finished, analysed game sees it.
    */
   analysis: GameAnalysis | null;
+  /**
+   * The LLM's plain-language take on the viewer's own game. Same visibility
+   * as `performance` (own play only) — null until Groq has produced one, and
+   * the coaching worker is an enhancement, so this may stay null forever if
+   * GROQ_API_KEY is unset.
+   */
+  coachSummary: string | null;
   /** The viewer's own board and pieces. Null falls back to the default. */
   boardStyle: string | null;
   pieceSet: string | null;
@@ -369,6 +377,7 @@ export function GameRoom({
         <Outcome game={game} viewerId={viewerId} playingAs={playingAs} />
 
         {performance && <PerformanceLine performance={performance} />}
+        {coachSummary && <CoachSummaryLine text={coachSummary} />}
       </section>
 
       <aside className="space-y-8">
