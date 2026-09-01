@@ -6,6 +6,9 @@ import {
 } from "../lib/chess/evaluation";
 import * as analysis from "../lib/services/analysis";
 import * as games from "../lib/services/games";
+import * as coach from "../lib/services/coach";
+import { generateCoachSummary } from "../lib/llm/coach";
+import * as groq from "../lib/llm/groq";
 import { Engine, EngineError, DEFAULT_DEPTH } from "./engine";
 
 /**
@@ -89,12 +92,39 @@ async function main() {
     `[analysis] queue: ${counts.queued} queued, ${counts.done} done, ${counts.failed} failed`,
   );
 
+  const coachingEnabled = groq.isConfigured();
+  console.log(
+    coachingEnabled
+      ? `[analysis] coaching enabled (${groq.model()})`
+      : "[analysis] coaching disabled: GROQ_API_KEY not set",
+  );
+
   let engineStarted = false;
 
   while (!stopping) {
     const gameId = await analysis.claimNext();
 
     if (gameId === null) {
+      if (coachingEnabled) {
+        const claim = await coach.claimNextForCoaching();
+        if (claim !== null) {
+          try {
+            const summary = await generateCoachSummary(claim.gameId, claim.userId);
+            await coach.recordCoachSummary(claim.gameId, claim.userId, summary, groq.model());
+            console.log(
+              `[analysis] coach: game ${claim.gameId} player ${claim.userId} summarised`,
+            );
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            await coach.recordCoachFailure(claim.gameId, claim.userId, message);
+            console.error(
+              `[analysis] coach: game ${claim.gameId} player ${claim.userId} failed: ${message}`,
+            );
+          }
+          continue;
+        }
+      }
+
       await sleep(POLL_MS);
       continue;
     }
