@@ -9,8 +9,15 @@ import type {
   WireMove,
 } from "@/realtime/protocol";
 import { formatClock } from "@/lib/chess/clock";
+import { capturedPieces, materialValue, sortByValue } from "@/lib/chess/material";
 import type { GamePerformance } from "@/lib/chess/rating";
 import { STARTING_FEN } from "@/lib/chess/position";
+import {
+  boardStyle as resolveBoardStyle,
+  boardVars,
+  glyph,
+  pieceSet as resolvePieceSet,
+} from "@/lib/board-styles";
 import { MAX_CHAT_LENGTH } from "@/lib/validation";
 import { Avatar, GrownUpTag } from "./Avatar";
 import { Board } from "./Board";
@@ -113,6 +120,20 @@ export function GameRoom({
   const at = reviewable ? reviewPly : null;
   const shown = positionAt(game, at);
 
+  // As of the position on screen, not necessarily the final one — stepping
+  // back through a finished game steps the captured pieces back with it.
+  const captured = capturedPieces(at === null ? game.moves : game.moves.slice(0, at));
+  const materialDiff =
+    materialValue(captured.byWhite) - materialValue(captured.byBlack);
+  const capturedFor = (playerId: number) =>
+    playerId === game.white.id ? captured.byWhite : captured.byBlack;
+  const advantageFor = (playerId: number) => {
+    if (materialDiff === 0) return null;
+    const leaderIsWhite = materialDiff > 0;
+    const playerIsWhite = playerId === game.white.id;
+    return leaderIsWhite === playerIsWhite ? Math.abs(materialDiff) : null;
+  };
+
   const step = useCallback(
     (to: number | "first" | "back" | "on" | "last") => {
       setReviewPly((current) => {
@@ -198,6 +219,13 @@ export function GameRoom({
             game.winnerId ===
             (orientation === "white" ? game.black.id : game.white.id)
           }
+          captured={capturedFor(
+            orientation === "white" ? game.black.id : game.white.id,
+          )}
+          advantage={advantageFor(
+            orientation === "white" ? game.black.id : game.white.id,
+          )}
+          pieceSetKey={pieceSet}
         />
 
         <div className="my-2">
@@ -225,6 +253,13 @@ export function GameRoom({
             game.winnerId ===
             (orientation === "white" ? game.white.id : game.black.id)
           }
+          captured={capturedFor(
+            orientation === "white" ? game.white.id : game.black.id,
+          )}
+          advantage={advantageFor(
+            orientation === "white" ? game.white.id : game.black.id,
+          )}
+          pieceSetKey={pieceSet}
         />
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -359,18 +394,26 @@ function PlayerBar({
   showClock,
   toMove,
   isWinner,
+  captured,
+  advantage,
+  pieceSetKey,
 }: {
   player: WireGame["white"];
   ms: number;
   showClock: boolean;
   toMove: boolean;
   isWinner: boolean;
+  /** Pieces this player has taken from the opponent, as of what's on screen. */
+  captured: string[];
+  /** This player's material lead in points, or null when there isn't one. */
+  advantage: number | null;
+  pieceSetKey: string | null;
 }) {
   const low = showClock && ms < 20_000;
 
   return (
     <div
-      className={`flex items-center gap-3 border-y px-3 py-2 ${
+      className={`flex flex-wrap items-center gap-x-3 gap-y-1 border-y px-3 py-2 ${
         toMove ? "border-ink bg-sheet" : "border-rule"
       }`}
     >
@@ -382,7 +425,18 @@ function PlayerBar({
         <span className="truncate font-semibold">{player.username}</span>
         <GrownUpTag role={player.role} />
       </Link>
+      {toMove && (
+        <span className="eyebrow text-brass" aria-label="To move">
+          ● to move
+        </span>
+      )}
       {isWinner && <span className="eyebrow text-brass">won</span>}
+
+      <CapturedRow
+        captured={captured}
+        advantage={advantage}
+        pieceSetKey={pieceSetKey}
+      />
 
       {showClock && (
         <span
@@ -394,6 +448,45 @@ function PlayerBar({
         </span>
       )}
     </div>
+  );
+}
+
+/** The pieces one player has taken from the other, heaviest first. */
+function CapturedRow({
+  captured,
+  advantage,
+  pieceSetKey,
+}: {
+  captured: string[];
+  advantage: number | null;
+  pieceSetKey: string | null;
+}) {
+  if (captured.length === 0) return null;
+  const set = resolvePieceSet(pieceSetKey);
+
+  return (
+    <span
+      style={boardVars(resolveBoardStyle(null), set)}
+      className="flex items-center gap-0.5"
+    >
+      {sortByValue(captured).map((letter, i) => {
+        const color = letter === letter.toLowerCase() ? "black" : "white";
+        return (
+          <span
+            key={i}
+            aria-hidden
+            className={`piece-glyph text-lg leading-none ${
+              color === "white" ? "piece-white" : "piece-black"
+            }`}
+          >
+            {glyph(set, letter.toLowerCase(), color)}
+          </span>
+        );
+      })}
+      {advantage !== null && (
+        <span className="font-mono text-xs text-ink-soft">+{advantage}</span>
+      )}
+    </span>
   );
 }
 

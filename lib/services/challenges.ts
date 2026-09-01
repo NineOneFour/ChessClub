@@ -1,6 +1,6 @@
 import { and, desc, eq, ne, or, sql } from "drizzle-orm";
 import { db } from "../db";
-import { challenges, gameOffers, users } from "../db/schema";
+import { challenges, gameOffers, users, usernameEquals } from "../db/schema";
 import { isTimeControlKey, timeControl } from "../chess/time-controls";
 import { describeTimeControl } from "../chess/time-controls";
 import { fail } from "../validation";
@@ -98,7 +98,7 @@ export async function create(input: {
     .from(users)
     .where(
       and(
-        eq(users.username, String(input.toUsername ?? "").toLowerCase()),
+        usernameEquals(String(input.toUsername ?? "")),
         eq(users.isActive, true),
       ),
     )

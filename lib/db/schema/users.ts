@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
   index,
@@ -33,7 +34,11 @@ export const users = pgTable(
   "users",
   {
     id: serial("id").primaryKey(),
-    /** Lower-cased login handle. Unique across the club. */
+    /**
+     * Login handle. The case the member chose is preserved for display;
+     * identity and uniqueness are case-insensitive (see `usernameEquals()`)
+     * so a child typing `terry` or `TERRY` still reaches `Terry`.
+     */
     username: text("username").notNull(),
     /**
      * The member's real-world name. Free-form, may contain spaces/caps.
@@ -96,8 +101,13 @@ export const users = pgTable(
       .defaultNow(),
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
   },
-  (t) => [uniqueIndex("users_username_key").on(t.username)],
+  (t) => [uniqueIndex("users_username_key").on(sql`lower(${t.username})`)],
 );
+
+/** Case-insensitive match against the stored username — casing is display-only. */
+export function usernameEquals(value: string) {
+  return sql`lower(${users.username}) = lower(${value})`;
+}
 
 /**
  * Database-backed sessions. The browser holds a random token; we store only

@@ -1,7 +1,6 @@
 import "dotenv/config";
-import { eq } from "drizzle-orm";
 import { client, db } from "../lib/db";
-import { users } from "../lib/db/schema";
+import { users, usernameEquals } from "../lib/db/schema";
 import * as usersService from "../lib/services/users";
 import { normalizeUsername } from "../lib/validation";
 
@@ -28,7 +27,7 @@ async function main() {
   const existing = await db
     .select({ id: users.id, role: users.role })
     .from(users)
-    .where(eq(users.username, username))
+    .where(usernameEquals(username))
     .limit(1);
 
   if (existing.length) {

@@ -59,8 +59,11 @@ export class Engine {
   name = "unknown engine";
 
   constructor(options: EngineOptions = {}) {
+    // `||`, not `??`: an unset STOCKFISH_PATH and an explicitly empty one
+    // (the documented "search PATH instead" value in .env.example) must both
+    // fall through, and `??` only catches the former.
     this.command =
-      options.command ?? process.env.STOCKFISH_PATH ?? "stockfish";
+      options.command || process.env.STOCKFISH_PATH || "stockfish";
     this.depth = options.depth ?? DEFAULT_DEPTH;
     this.threads = options.threads ?? 1;
     this.hashMb = options.hashMb ?? 64;

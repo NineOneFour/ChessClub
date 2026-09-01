@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Bricolage_Grotesque, DM_Mono, Instrument_Sans } from "next/font/google";
+import { NotificationCenter } from "./components/NotificationCenter";
 import "./globals.css";
 
 const display = Bricolage_Grotesque({
@@ -31,7 +32,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${display.variable} ${body.variable} ${mono.variable} h-full antialiased`}
     >
-      <body className="flex min-h-full flex-col">{children}</body>
+      <body className="flex min-h-full flex-col">
+        <NotificationCenter />
+        {children}
+      </body>
     </html>
   );
 }

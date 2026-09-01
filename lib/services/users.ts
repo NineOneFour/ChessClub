@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 import { db } from "../db";
-import { families, presence, users } from "../db/schema";
+import { families, presence, users, usernameEquals } from "../db/schema";
 import { hashPassword, MIN_PASSWORD_LENGTH, verifyPassword } from "../auth/password";
 import { deleteSessionsForUser } from "../auth/session-store";
 import { isAvatarKey } from "../avatars";
@@ -105,7 +105,7 @@ export async function authenticate(
       isActive: users.isActive,
     })
     .from(users)
-    .where(eq(users.username, username))
+    .where(usernameEquals(username))
     .limit(1);
 
   const row = rows[0];
@@ -132,7 +132,7 @@ export async function getByUsername(username: string): Promise<Member | null> {
     .select(memberColumns)
     .from(users)
     .leftJoin(families, eq(families.id, users.familyId))
-    .where(eq(users.username, username.toLowerCase()))
+    .where(usernameEquals(username))
     .limit(1);
   return rows[0] ?? null;
 }
@@ -254,7 +254,7 @@ export async function assertCanCreate(input: {
   const existing = await db
     .select({ id: users.id })
     .from(users)
-    .where(eq(users.username, username))
+    .where(usernameEquals(username))
     .limit(1);
   if (existing.length) fail(`The username "${username}" is already taken.`);
 }
@@ -284,7 +284,7 @@ export async function create(input: {
   const existing = await db
     .select({ id: users.id })
     .from(users)
-    .where(eq(users.username, username))
+    .where(usernameEquals(username))
     .limit(1);
   if (existing.length) fail(`The username "${username}" is already taken.`);
 
@@ -350,7 +350,7 @@ export async function updateProfile(
     const taken = await db
       .select({ id: users.id })
       .from(users)
-      .where(and(eq(users.username, username), ne(users.id, userId)))
+      .where(and(usernameEquals(username), ne(users.id, userId)))
       .limit(1);
     if (taken.length) fail(`The username "${username}" is already taken.`);
   }

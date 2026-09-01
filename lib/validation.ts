@@ -10,16 +10,17 @@ export function fail(message: string): never {
   throw new ValidationError(message);
 }
 
-const USERNAME_RE = /^[a-z0-9][a-z0-9_-]{1,23}$/;
+const USERNAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9_-]{1,23}$/;
 
 /**
- * Usernames are lower-cased on the way in, so `Ellie` and `ellie` are the
- * same login. Kids will not remember which they typed.
+ * The case a member types is kept, so `Ellie` displays as `Ellie` — but it is
+ * never the basis for identity: lookups and uniqueness go through
+ * `usernameEquals()` in `lib/db/schema/users.ts`, which compares
+ * case-insensitively, so `Ellie` and `ellie` are still the same login. Kids
+ * will not remember which case they typed.
  */
 export function normalizeUsername(raw: unknown): string {
-  const value = String(raw ?? "")
-    .trim()
-    .toLowerCase();
+  const value = String(raw ?? "").trim();
   if (!USERNAME_RE.test(value)) {
     fail(
       "Usernames must be 2-24 characters: letters, numbers, dashes and underscores, starting with a letter or number.",
