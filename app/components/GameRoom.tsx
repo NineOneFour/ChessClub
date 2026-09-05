@@ -10,7 +10,6 @@ import type {
 } from "@/realtime/protocol";
 import { formatClock } from "@/lib/chess/clock";
 import { capturedPieces, materialValue, sortByValue } from "@/lib/chess/material";
-import type { GamePerformance } from "@/lib/chess/rating";
 import { STARTING_FEN } from "@/lib/chess/position";
 import {
   boardStyle as resolveBoardStyle,
@@ -19,12 +18,13 @@ import {
   pieceVisual,
 } from "@/lib/board-styles";
 import type { MoveQuality } from "@/lib/db/schema";
-import type { GameAnalysis } from "@/lib/services/analysis";
+import type { GameReview } from "@/app/game/[id]/actions";
 import { MAX_CHAT_LENGTH } from "@/lib/validation";
 import { Avatar, GrownUpTag } from "./Avatar";
 import { Board } from "./Board";
-import { CoachSummaryLine, PerformanceLine } from "./Strength";
+import { CoachSummary, PerformanceLine, ReviewWaitingLine } from "./Strength";
 import { SectionHeading } from "./SectionHeading";
+import { useGameReview } from "./useGameReview";
 import { useGameSocket, useLiveClock } from "./useGameSocket";
 
 /**
@@ -40,9 +40,7 @@ export function GameRoom({
   viewerId,
   canChat,
   chatBlockedReason,
-  performance,
-  analysis,
-  coachSummary,
+  initialReview,
   boardStyle,
   pieceSet,
 }: {
@@ -53,23 +51,12 @@ export function GameRoom({
   canChat: boolean;
   chatBlockedReason: string | null;
   /**
-   * What the viewer's own play in this game was worth, once it is over and
-   * analysed. Null for a spectator, a live game, or one Stockfish hasn't
-   * reached yet.
+   * The assessment as it stood when the page rendered: the viewer's own
+   * performance, the per-move quality behind the score sheet, and the coach's
+   * text. All three arrive minutes after a game ends, so this is only a
+   * starting point — the room keeps asking for the rest (useGameReview).
    */
-  performance: GamePerformance | null;
-  /**
-   * Per-move quality for the score sheet. Unlike `performance`, not limited
-   * to the two players — anyone reviewing a finished, analysed game sees it.
-   */
-  analysis: GameAnalysis | null;
-  /**
-   * The LLM's plain-language take on the viewer's own game. Same visibility
-   * as `performance` (own play only) — null until Groq has produced one, and
-   * the coaching worker is an enhancement, so this may stay null forever if
-   * GROQ_API_KEY is unset.
-   */
-  coachSummary: string | null;
+  initialReview: GameReview;
   /** The viewer's own board and pieces. Null falls back to the default. */
   boardStyle: string | null;
   pieceSet: string | null;
@@ -103,6 +90,18 @@ export function GameRoom({
       : viewerId === game.black.id
         ? "black"
         : null;
+
+  /**
+   * Stockfish's and the coach's verdict on this game, which lands well after
+   * the game itself does. Seeded by the server render and then kept current
+   * on its own, so a game you just finished fills itself in.
+   */
+  const { review, waiting: reviewWaiting } = useGameReview(
+    gameId,
+    game.status === "finished",
+    playingAs !== null,
+    initialReview,
+  );
 
   const opponent =
     playingAs === "white"
@@ -214,7 +213,7 @@ export function GameRoom({
   }, [game.ply, game.status]);
 
   const qualityByPly = new Map(
-    analysis?.moves.map((move) => [move.ply, move.quality]) ?? [],
+    review.analysis?.moves.map((move) => [move.ply, move.quality]) ?? [],
   );
 
   const drawOfferedToMe =
@@ -376,8 +375,14 @@ export function GameRoom({
 
         <Outcome game={game} viewerId={viewerId} playingAs={playingAs} />
 
-        {performance && <PerformanceLine performance={performance} />}
-        {coachSummary && <CoachSummaryLine text={coachSummary} />}
+        {review.performance && <PerformanceLine performance={review.performance} />}
+        {review.coachSummary && <CoachSummary text={review.coachSummary} />}
+        {reviewWaiting && (
+          <ReviewWaitingLine
+            stage={review.analysis?.status === "done" ? "coach" : "engine"}
+            forMe={playingAs !== null}
+          />
+        )}
       </section>
 
       <aside className="space-y-8">

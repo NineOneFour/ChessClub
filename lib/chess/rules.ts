@@ -213,6 +213,25 @@ export function canMateWithMaterial(fen: string, color: Color): boolean {
 }
 
 /**
+ * The engine's own move, written the way a person reads it: `e2e4` in some
+ * position becomes `e4`.
+ *
+ * Only the coaching prompt needs this — the engine records what it would have
+ * played in UCI, and telling a child "the engine liked g1f3" is telling them
+ * nothing. Returns null if the move isn't legal in that position, which would
+ * mean the stored analysis and the stored position had drifted apart.
+ */
+export function sanForUci(fen: string, uci: string): string | null {
+  const move = parseUci(uci);
+  if (!move) return null;
+  try {
+    return new Chess(fen).move(move).san;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * A game as PGN. Headers follow the standard seven-tag roster so the file
  * imports cleanly into anything — which matters, because these games are meant
  * to be re-analysed later.

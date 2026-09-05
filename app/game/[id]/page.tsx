@@ -41,6 +41,9 @@ export default async function GamePage({ params }: PageProps<"/game/[id]">) {
       analysisService.forGame(gameId),
       // The LLM coaching summary, same visibility as performance: only the
       // viewer's own text, only once Stockfish and Groq have both finished.
+      // These last three are the state of the review *at this instant*; a game
+      // that has only just ended has none of them yet, so the room asks again
+      // itself rather than making anyone reload — see useGameReview.ts.
       coach.summaryFor(gameId, me.id),
     ]);
   if (!state) notFound();
@@ -63,9 +66,7 @@ export default async function GamePage({ params }: PageProps<"/game/[id]">) {
         gameId={gameId}
         viewerId={me.id}
         canChat={speak.ok}
-        performance={performance}
-        analysis={analysis}
-        coachSummary={coachSummary}
+        initialReview={{ performance, analysis, coachSummary }}
         boardStyle={viewer?.boardStyle ?? null}
         pieceSet={viewer?.pieceSet ?? null}
         chatBlockedReason={speak.ok ? null : speak.reason}

@@ -73,7 +73,7 @@ export function PerformanceLine({
 }) {
   if (performance.rating === null) {
     return (
-      <p className="mt-3 text-sm text-ink-soft">
+      <p className="mt-4 text-base leading-relaxed text-ink-soft">
         Too short to judge — {performance.moves}{" "}
         {performance.moves === 1 ? "move" : "moves"} isn&apos;t enough to say how
         you played.
@@ -84,10 +84,10 @@ export function PerformanceLine({
   const slips = performance.mistakes + performance.inaccuracies;
 
   return (
-    <div className="mt-3 border-l-2 border-brass pl-3 text-sm">
+    <div className="mt-4 border-l-2 border-brass pl-4 text-base leading-relaxed">
       You played this game at about{" "}
       <strong>{performance.rating}</strong> level.
-      <p className="mt-1 font-mono text-[0.65rem] text-ink-soft">
+      <p className="mt-1 font-mono text-xs text-ink-soft">
         {performance.acpl} average loss ·{" "}
         {performance.blunders === 0
           ? "no blunders"
@@ -104,12 +104,97 @@ export function PerformanceLine({
  * explanation of what the numbers above mean, not a second opinion on them.
  * Shown only once it exists; a game can be fully analysed with no coaching
  * text yet (Groq unconfigured, or not yet its turn in the worker's queue).
+ *
+ * Set at a full 1rem and given room to breathe: an eight-year-old is the
+ * reader, and this is the one block on the page meant to be read rather than
+ * glanced at.
  */
-export function CoachSummaryLine({ text }: { text: string }) {
+export function CoachSummary({ text }: { text: string }) {
+  const { prose, tips } = coachParts(text);
+
   return (
-    <div className="mt-3 border-l-2 border-rule pl-3 text-sm">
+    <div className="mt-4 border-l-2 border-rule pl-4">
       <p className="eyebrow text-xs">Coach</p>
-      <p className="mt-1 text-ink-soft">{text}</p>
+
+      {prose.map((paragraph, index) => (
+        <p key={index} className="mt-2 text-base leading-relaxed text-ink">
+          {paragraph}
+        </p>
+      ))}
+
+      {tips.length > 0 && (
+        <>
+          <p className="eyebrow mt-4 text-xs">To work on</p>
+          <ul className="mt-2 space-y-2">
+            {tips.map((tip, index) => (
+              <li
+                key={index}
+                className="flex gap-2 text-base leading-relaxed text-ink"
+              >
+                <span aria-hidden className="text-brass">
+                  ·
+                </span>
+                <span>{tip}</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </div>
+  );
+}
+
+/**
+ * Split the coach's one stored string into the opening paragraph(s) and the
+ * tips — the prompt asks for prose, then one tip per line starting with "- ".
+ *
+ * A model that ignores the shape, or a summary stored before tips existed,
+ * simply comes back as prose with no tips, which still reads correctly. That
+ * is why this parses rather than the database storing two columns: the shape
+ * is a request, not a guarantee.
+ */
+function coachParts(text: string): { prose: string[]; tips: string[] } {
+  const prose: string[] = [];
+  const tips: string[] = [];
+
+  for (const raw of text.split("\n")) {
+    const line = raw.trim();
+    if (!line) continue;
+    const bullet = /^[-*\u2022]\s+(.+)$/.exec(line);
+    if (bullet) tips.push(bullet[1].trim());
+    else prose.push(line);
+  }
+
+  return { prose, tips };
+}
+
+/**
+ * What is still coming. A finished game is analysed by a separate worker and
+ * coached after that, so there is a gap — a few seconds, or a few minutes for
+ * a long game — where the honest thing to show is "this is being worked on"
+ * rather than an empty space that gives no reason to wait.
+ */
+export function ReviewWaitingLine({
+  stage,
+  /** A spectator waits only for the score sheet; nothing here is about them. */
+  forMe,
+}: {
+  stage: "engine" | "coach";
+  forMe: boolean;
+}) {
+  const message =
+    stage === "engine"
+      ? forMe
+        ? "The engine is going through your moves. This page will fill itself in — no need to reload."
+        : "The engine is going through this game. The score sheet will colour itself in when it's done."
+      : "Your coach is reading the engine's notes and writing to you now.";
+
+  return (
+    <p
+      role="status"
+      className="mt-4 border-l-2 border-rule pl-4 text-base leading-relaxed text-ink-soft"
+    >
+      {message}
+    </p>
   );
 }
