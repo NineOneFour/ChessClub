@@ -244,12 +244,19 @@ export function toPgn(game: {
   startedAt: Date;
   timeControl: string;
   reason: ResultReason | null;
+  /**
+   * The host members reach the club at, for the Site tag. Passed in rather
+   * than known here: this module is pure and cannot read the environment,
+   * and a domain hardcoded in it outlives the domain (it said
+   * chess.vsakis.com long after the club moved to chessclub.vsakis.com).
+   */
+  site: string;
 }): string {
   const chess = load(game.moves);
   const date = game.startedAt;
 
   chess.setHeader("Event", "The Chess Club");
-  chess.setHeader("Site", "chess.vsakis.com");
+  chess.setHeader("Site", game.site);
   chess.setHeader(
     "Date",
     `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(

@@ -11,6 +11,7 @@ import * as analysis from "./analysis";
 import * as rules from "../chess/rules";
 import { describeTimeControl } from "../chess/time-controls";
 import { fail } from "../validation";
+import { PUBLIC_ORIGIN } from "../config";
 
 /**
  * Games.
@@ -741,6 +742,7 @@ export async function toPgn(gameId: number): Promise<string | null> {
         ? "-"
         : `${state.initialMs / 1000}+${state.incrementMs / 1000}`,
     reason: state.resultReason,
+    site: new URL(PUBLIC_ORIGIN).host,
   });
 }
 

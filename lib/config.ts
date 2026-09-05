@@ -11,7 +11,7 @@ function required(name: string): string {
   return value;
 }
 
-/** The URL members reach the club at, e.g. https://chess.vsakis.com */
+/** The URL members reach the club at, e.g. https://chessclub.vsakis.com */
 export const PUBLIC_ORIGIN = (
   process.env.PUBLIC_ORIGIN ?? "http://localhost:3000"
 ).replace(/\/$/, "");

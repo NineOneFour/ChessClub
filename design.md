@@ -438,7 +438,7 @@ broadcasts to everybody rather than sending to one member.
 
 ## 11. Self-hosting
 
-Lives on a Proxmox server at **chess.vsakis.com**. TLS and the domain are
+Lives on a Proxmox server at **chessclub.vsakis.com**. TLS and the domain are
 handled upstream, so the app is served over plain HTTP behind a reverse proxy
 and must be told what its public origin is.
 
@@ -449,7 +449,7 @@ The proxy needs to do two things:
    headers intact**. `/healthz` on the same service answers a health check.
 
 `PUBLIC_ORIGIN` drives both the invitation links and whether session cookies
-are marked `Secure`; set it to `https://chess.vsakis.com` in production even
+are marked `Secure`; set it to `https://chessclub.vsakis.com` in production even
 though the app itself speaks http.
 
 `NEXT_PUBLIC_REALTIME_URL` should be **empty** in production — the browser then
